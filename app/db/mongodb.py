@@ -8,7 +8,9 @@ mongodb+srv://user:pass@cluster.mongodb.net/dbname?retryWrites=true&w=majority
 """
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.server_api import ServerApi
-from typing import Optionalimport certifi
+from typing import Optional
+import certifi
+
 from app.core.config import settings
 
 
