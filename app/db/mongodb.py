@@ -31,10 +31,11 @@ class MongoDB:
         }
         
         # For MongoDB Atlas (SRV connections), use Server API for stability
+        # Let Motor handle TLS automatically for mongodb+srv:// URLs
         if mongo_url.startswith("mongodb+srv://"):
             connection_options["server_api"] = ServerApi('1')
-            connection_options["tls"] = True
-            connection_options["tlsAllowInvalidCertificates"] = False
+            # Don't explicitly set tls/tlsAllowInvalidCertificates
+            # Motor will handle TLS automatically for SRV connections
         
         self.client = AsyncIOMotorClient(mongo_url, **connection_options)
         self.db = self.client[settings.MONGO_DB]
