@@ -39,3 +39,4 @@ httpx==0.28.1
 
 # Cryptography dependencies
 cryptography==46.0.3
+certifi==2024.6.16
