@@ -21,6 +21,14 @@ def _create_engine():
     """Create async engine with appropriate SSL settings."""
     postgres_url = settings.postgres_url
     
+    # Validate database URL is set
+    if not postgres_url or postgres_url == "postgresql+asyncpg://:@:5432/":
+        raise ValueError(
+            "PostgreSQL connection URL is not configured. "
+            "Set DATABASE_URL environment variable or configure component variables "
+            "(POSTGRES_HOST, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB)."
+        )
+    
     # Engine configuration
     engine_options = {
         "echo": settings.DEBUG,

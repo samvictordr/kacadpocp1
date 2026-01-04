@@ -46,11 +46,12 @@ class Settings(BaseSettings):
             elif url.startswith("postgresql://") and "+asyncpg" not in url:
                 url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
             
-            # Ensure SSL mode is set for production (Render requires SSL)
+            # Ensure SSL is enabled for production (Render requires SSL)
+            # asyncpg uses 'ssl=require' not 'sslmode=require'
             parsed = urlparse(url)
             query_params = parse_qs(parsed.query)
-            if "sslmode" not in query_params and not self.DEBUG:
-                query_params["sslmode"] = ["require"]
+            if "ssl" not in query_params and "sslmode" not in query_params and not self.DEBUG:
+                query_params["ssl"] = ["require"]
                 new_query = urlencode(query_params, doseq=True)
                 url = urlunparse(parsed._replace(query=new_query))
             
