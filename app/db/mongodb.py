@@ -8,8 +8,7 @@ mongodb+srv://user:pass@cluster.mongodb.net/dbname?retryWrites=true&w=majority
 """
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.server_api import ServerApi
-from typing import Optional
-
+from typing import Optionalimport certifi
 from app.core.config import settings
 
 
@@ -30,12 +29,11 @@ class MongoDB:
             "socketTimeoutMS": 30000,
         }
         
-        # For MongoDB Atlas (SRV connections), use Server API for stability
-        # Let Motor handle TLS automatically for mongodb+srv:// URLs
+        # For MongoDB Atlas (SRV connections), use Server API and certifi CA bundle
         if mongo_url.startswith("mongodb+srv://"):
             connection_options["server_api"] = ServerApi('1')
-            # Don't explicitly set tls/tlsAllowInvalidCertificates
-            # Motor will handle TLS automatically for SRV connections
+            # Use certifi's CA bundle for TLS (fixes Python 3.13 SSL issues)
+            connection_options["tlsCAFile"] = certifi.where()
         
         self.client = AsyncIOMotorClient(mongo_url, **connection_options)
         self.db = self.client[settings.MONGO_DB]
