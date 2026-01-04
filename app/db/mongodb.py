@@ -26,16 +26,17 @@ class MongoDB:
         
         # Configure connection options
         connection_options = {
-            "serverSelectionTimeoutMS": 10000,  # 10 second timeout
-            "connectTimeoutMS": 10000,
+            "serverSelectionTimeoutMS": 30000,  # 30 second timeout
+            "connectTimeoutMS": 30000,
             "socketTimeoutMS": 30000,
         }
         
-        # For MongoDB Atlas (SRV connections), use Server API and certifi CA bundle
+        # For MongoDB Atlas (SRV connections), configure TLS properly for Python 3.13
         if mongo_url.startswith("mongodb+srv://"):
             connection_options["server_api"] = ServerApi('1')
-            # Use certifi's CA bundle for TLS (fixes Python 3.13 SSL issues)
             connection_options["tlsCAFile"] = certifi.where()
+            # NOTE: If you're getting SSL errors, ensure MongoDB Atlas has 0.0.0.0/0 
+            # in the IP Access List (Network Access → Add IP Address → Allow Access from Anywhere)
         
         self.client = AsyncIOMotorClient(mongo_url, **connection_options)
         self.db = self.client[settings.MONGO_DB]
