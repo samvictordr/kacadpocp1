@@ -96,13 +96,13 @@ async def get_dashboard_stats():
             
             result = await session.execute(text("""
                 SELECT COUNT(*) FROM store_transactions 
-                WHERE DATE(transaction_time) = CURRENT_DATE
+                WHERE DATE(created_at) = CURRENT_DATE
             """))
             stats["transactions_today"] = result.scalar() or 0
             
             result = await session.execute(text("""
-                SELECT COALESCE(SUM(total_amount), 0) FROM store_transactions 
-                WHERE DATE(transaction_time) = CURRENT_DATE
+                SELECT COALESCE(SUM(amount), 0) FROM store_transactions 
+                WHERE DATE(created_at) = CURRENT_DATE
             """))
             stats["revenue_today"] = float(result.scalar() or 0)
             
@@ -152,17 +152,17 @@ async def get_telemetry():
             metrics["postgres"]["table_counts"] = {r[0]: r[1] for r in rows}
             
             result = await session.execute(text("""
-                SELECT COUNT(*) FROM store_transactions WHERE DATE(transaction_time) = CURRENT_DATE
+                SELECT COUNT(*) FROM store_transactions WHERE DATE(created_at) = CURRENT_DATE
             """))
             metrics["transactions"]["today"] = result.scalar() or 0
             
             result = await session.execute(text("""
-                SELECT COUNT(*) FROM store_transactions WHERE transaction_time >= CURRENT_DATE - INTERVAL '7 days'
+                SELECT COUNT(*) FROM store_transactions WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
             """))
             metrics["transactions"]["week"] = result.scalar() or 0
             
             result = await session.execute(text("""
-                SELECT COUNT(*) FROM store_transactions WHERE transaction_time >= CURRENT_DATE - INTERVAL '30 days'
+                SELECT COUNT(*) FROM store_transactions WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
             """))
             metrics["transactions"]["month"] = result.scalar() or 0
             
@@ -205,11 +205,11 @@ async def get_transaction_trends():
     try:
         async with async_session_factory() as session:
             result = await session.execute(text("""
-                SELECT DATE(transaction_time) as date, COUNT(*) as count,
-                       COALESCE(SUM(total_amount), 0) as total
+                SELECT DATE(created_at) as date, COUNT(*) as count,
+                       COALESCE(SUM(amount), 0) as total
                 FROM store_transactions
-                WHERE transaction_time >= CURRENT_DATE - INTERVAL '7 days'
-                GROUP BY DATE(transaction_time) ORDER BY date
+                WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY DATE(created_at) ORDER BY date
             """))
             rows = result.fetchall()
             return [{"date": str(r[0]), "count": r[1], "total": float(r[2])} for r in rows]
@@ -299,8 +299,7 @@ async def get_all_programs():
     try:
         async with async_session_factory() as session:
             result = await session.execute(text("""
-                SELECT p.program_id, p.name, p.cost_center, 
-                       p.default_daily_allowance, p.is_active,
+                SELECT p.program_id, p.name, p.cost_center_code, p.active,
                        COUNT(DISTINCT s.student_id) as student_count,
                        COUNT(DISTINCT t.teacher_id) as teacher_count
                 FROM programs p
@@ -309,7 +308,7 @@ async def get_all_programs():
                 GROUP BY p.program_id ORDER BY p.name
             """))
             rows = result.fetchall()
-            columns = ["program_id", "name", "cost_center", "default_daily_allowance", "is_active", "student_count", "teacher_count"]
+            columns = ["program_id", "name", "cost_center_code", "active", "student_count", "teacher_count"]
             return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -438,13 +437,12 @@ async def create_program(data: dict):
         
         async with async_session_factory() as session:
             await session.execute(text("""
-                INSERT INTO programs (program_id, name, cost_center, default_daily_allowance, is_active)
-                VALUES (:program_id, :name, :cost_center, :default_daily_allowance, true)
+                INSERT INTO programs (program_id, name, cost_center_code, active)
+                VALUES (:program_id, :name, :cost_center_code, true)
             """), {
                 "program_id": program_id,
                 "name": data["name"],
-                "cost_center": data["cost_center"],
-                "default_daily_allowance": float(data.get("default_daily_allowance", 50.0))
+                "cost_center_code": data.get("cost_center_code", "DEFAULT")
             })
             await session.commit()
         
@@ -459,14 +457,12 @@ async def update_program(program_id: str, data: dict):
     try:
         async with async_session_factory() as session:
             await session.execute(text("""
-                UPDATE programs SET name = :name, cost_center = :cost_center, 
-                default_daily_allowance = :default_daily_allowance, is_active = :is_active 
-                WHERE program_id = :program_id
+                UPDATE programs SET name = :name, cost_center_code = :cost_center_code, 
+                active = :active WHERE program_id = :program_id
             """), {
                 "name": data["name"],
-                "cost_center": data["cost_center"],
-                "default_daily_allowance": float(data.get("default_daily_allowance", 50.0)),
-                "is_active": data.get("is_active", True),
+                "cost_center_code": data.get("cost_center_code", "DEFAULT"),
+                "active": data.get("active", True),
                 "program_id": program_id
             })
             await session.commit()
