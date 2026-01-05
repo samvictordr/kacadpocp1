@@ -50,7 +50,8 @@ async def get_attendance_qr(
 @router.get(
     "/store-qr",
     response_model=StoreQRResponse,
-    responses={404: {"model": ErrorResponse}}
+    responses={404: {"model": ErrorResponse}},
+    deprecated=True
 )
 async def get_store_qr(
     current_user: TokenPayload = Depends(require_student),
@@ -59,7 +60,35 @@ async def get_store_qr(
     redis: RedisClient = Depends(get_redis)
 ):
     """
+    [DEPRECATED] Use /meal-qr instead.
     Get QR code data for store purchases.
+    Shows current balance.
+    """
+    service = StoreService(pg, mongo, redis)
+    result = await service.generate_store_qr(current_user.user_id)
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student record not found or no allowance set"
+        )
+    
+    return StoreQRResponse(**result)
+
+
+@router.get(
+    "/meal-qr",
+    response_model=StoreQRResponse,
+    responses={404: {"model": ErrorResponse}}
+)
+async def get_meal_qr(
+    current_user: TokenPayload = Depends(require_student),
+    pg: AsyncSession = Depends(get_postgres_session),
+    mongo: AsyncIOMotorDatabase = Depends(get_mongodb),
+    redis: RedisClient = Depends(get_redis)
+):
+    """
+    Get QR code data for meal purchases.
     Shows current balance.
     """
     service = StoreService(pg, mongo, redis)

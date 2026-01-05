@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.models.postgres_models import Student, Program, StoreTransaction, DailyAllowance
+from app.models.postgres_models import (
+    Student, Program, StoreTransaction, DailyAllowance,
+    Teacher, TeacherDailyAllowance, TeacherMealTransaction
+)
 from app.db.redis import RedisClient
 from app.core.config import settings
 from app.core.logging import audit_log
@@ -208,6 +211,179 @@ class StoreService:
             "success": True,
             "transaction_id": str(transaction.transaction_id),
             "student_id": student_id,
+            "amount": amount,
+            "balance_after": new_balance,
+            "message": f"Charged {amount:.2f}. Remaining balance: {new_balance:.2f}"
+        }
+
+    # ========== Teacher Meal Methods ==========
+    
+    async def get_teacher_by_id(self, teacher_id: str) -> Optional[Teacher]:
+        """Get teacher by teacher_id."""
+        result = await self.pg.execute(
+            select(Teacher).where(Teacher.teacher_id == UUID(teacher_id))
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_teacher_by_user_id(self, user_id: str) -> Optional[Teacher]:
+        """Get teacher by user_id."""
+        result = await self.pg.execute(
+            select(Teacher).where(Teacher.user_id == UUID(user_id))
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_teacher_today_allowance(self, teacher_id: UUID) -> Optional[TeacherDailyAllowance]:
+        """Get today's meal allowance for a teacher."""
+        today = date.today()
+        result = await self.pg.execute(
+            select(TeacherDailyAllowance).where(
+                TeacherDailyAllowance.teacher_id == teacher_id,
+                TeacherDailyAllowance.date == today
+            )
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_teacher_today_spent(self, teacher_id: UUID) -> Decimal:
+        """Get total amount spent today by a teacher on meals."""
+        today = date.today()
+        result = await self.pg.execute(
+            select(func.coalesce(func.sum(TeacherMealTransaction.amount), Decimal("0.00")))
+            .where(
+                TeacherMealTransaction.teacher_id == teacher_id,
+                func.date(TeacherMealTransaction.created_at) == today
+            )
+        )
+        return result.scalar()
+    
+    async def get_teacher_balance(self, teacher_id: UUID) -> Optional[dict]:
+        """Get current meal balance for a teacher."""
+        allowance = await self.get_teacher_today_allowance(teacher_id)
+        if not allowance:
+            return None
+        
+        spent = await self.get_teacher_today_spent(teacher_id)
+        remaining = allowance.total_amount - spent
+        
+        return {
+            "teacher_id": str(teacher_id),
+            "date": str(allowance.date),
+            "base_amount": allowance.base_amount,
+            "bonus_amount": allowance.bonus_amount,
+            "total_amount": allowance.total_amount,
+            "spent_today": spent,
+            "remaining": max(Decimal("0.00"), remaining)
+        }
+    
+    async def generate_teacher_meal_qr(self, user_id: str) -> Optional[dict]:
+        """
+        Get meal QR data for a teacher.
+        """
+        teacher = await self.get_teacher_by_user_id(user_id)
+        if not teacher:
+            return None
+        
+        balance_info = await self.get_teacher_balance(teacher.teacher_id)
+        if not balance_info:
+            return None
+        
+        today = str(date.today())
+        
+        return {
+            "teacher_id": str(teacher.teacher_id),
+            "date": today,
+            "balance": balance_info["remaining"]
+        }
+    
+    async def scan_teacher(self, teacher_id: str, staff_user_id: str) -> tuple[bool, str, Optional[dict]]:
+        """
+        Scan a teacher's QR to check their meal balance.
+        Returns (success, message, data).
+        """
+        teacher = await self.get_teacher_by_id(teacher_id)
+        if not teacher:
+            return False, "Teacher not found", None
+        
+        if not teacher.is_active:
+            return False, "Teacher account is inactive", None
+        
+        # Get program info if assigned
+        program = None
+        if teacher.program_id:
+            result = await self.pg.execute(
+                select(Program).where(Program.program_id == teacher.program_id)
+            )
+            program = result.scalar_one_or_none()
+        
+        balance_info = await self.get_teacher_balance(teacher.teacher_id)
+        if not balance_info:
+            return False, "No meal allowance set for today", None
+        
+        return True, "Teacher found", {
+            "student_id": str(teacher.teacher_id),  # Use student_id key for compatibility
+            "student_name": teacher.full_name,
+            "program_name": program.name if program else "Staff",
+            "balance": balance_info["remaining"],
+            "date": str(date.today()),
+            "is_teacher": True
+        }
+    
+    async def charge_teacher(
+        self,
+        staff_user_id: str,
+        teacher_id: str,
+        amount: Decimal,
+        location: Optional[str] = None,
+        notes: Optional[str] = None
+    ) -> tuple[bool, str, Optional[dict]]:
+        """
+        Charge a teacher's meal allowance.
+        Returns (success, message, transaction_data).
+        """
+        teacher = await self.get_teacher_by_id(teacher_id)
+        if not teacher:
+            return False, "Teacher not found", None
+        
+        if not teacher.is_active:
+            return False, "Teacher account is inactive", None
+        
+        balance_info = await self.get_teacher_balance(teacher.teacher_id)
+        if not balance_info:
+            return False, "No meal allowance set for today", None
+        
+        current_balance = balance_info["remaining"]
+        
+        if amount > current_balance:
+            return False, f"Insufficient balance. Available: {current_balance:.2f}", None
+        
+        # Calculate new balance
+        new_balance = current_balance - amount
+        
+        # Create transaction
+        transaction = TeacherMealTransaction(
+            teacher_id=teacher.teacher_id,
+            program_id=teacher.program_id,
+            amount=amount,
+            balance_after=new_balance,
+            scanned_by=staff_user_id,
+            location=location,
+            notes=notes
+        )
+        
+        self.pg.add(transaction)
+        await self.pg.flush()
+        
+        audit_log.log_store_transaction(
+            staff_id=staff_user_id,
+            student_id=f"teacher:{teacher_id}",
+            amount=amount,
+            balance_after=new_balance,
+            location=location
+        )
+        
+        return True, "Transaction successful", {
+            "success": True,
+            "transaction_id": str(transaction.transaction_id),
+            "student_id": teacher_id,
             "amount": amount,
             "balance_after": new_balance,
             "message": f"Charged {amount:.2f}. Remaining balance: {new_balance:.2f}"

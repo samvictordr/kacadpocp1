@@ -80,6 +80,24 @@ class TeacherClassesResponse(BaseModel):
     classes: List[ClassResponse]
 
 
+class TeacherMealQRResponse(BaseModel):
+    """Response containing QR code data for teacher meal purchases."""
+    teacher_id: str
+    date: str
+    balance: Decimal
+
+
+class TeacherBalanceResponse(BaseModel):
+    """Response containing teacher's current meal balance."""
+    teacher_id: str
+    date: str
+    base_amount: Decimal
+    bonus_amount: Decimal
+    total_amount: Decimal
+    spent_today: Decimal
+    remaining: Decimal
+
+
 class AttendanceMode(str, Enum):
     """Mode of attendance session."""
     STATIC = "static"

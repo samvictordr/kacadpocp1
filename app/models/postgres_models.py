@@ -48,6 +48,23 @@ class Program(Base):
     classes = relationship("Class", back_populates="program")
 
 
+class Teacher(Base):
+    """Teacher record linked to MongoDB user for meal allowance."""
+    __tablename__ = "teachers"
+    
+    teacher_id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(PGUUID(as_uuid=True), unique=True, nullable=False)
+    full_name = Column(Text, nullable=False)
+    program_id = Column(PGUUID(as_uuid=True), ForeignKey("programs.program_id"), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    
+    # Relationships
+    program = relationship("Program")
+    daily_allowances = relationship("TeacherDailyAllowance", back_populates="teacher")
+    meal_transactions = relationship("TeacherMealTransaction", back_populates="teacher")
+
+
 class Student(Base):
     """Student record linked to MongoDB user."""
     __tablename__ = "students"
@@ -176,3 +193,42 @@ class AttendanceRecord(Base):
     # Relationships
     session = relationship("AttendanceSession", back_populates="records")
     student = relationship("Student", back_populates="attendance_records")
+
+
+class TeacherDailyAllowance(Base):
+    """Daily meal allowance for a teacher."""
+    __tablename__ = "teacher_daily_allowances"
+    
+    allowance_id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    teacher_id = Column(PGUUID(as_uuid=True), ForeignKey("teachers.teacher_id"), nullable=False)
+    date = Column(Date, nullable=False)
+    base_amount = Column(Numeric(10, 2), nullable=False)
+    bonus_amount = Column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)
+    total_amount = Column(Numeric(10, 2), nullable=False)
+    reset_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    
+    __table_args__ = (
+        UniqueConstraint('teacher_id', 'date', name='uq_teacher_date'),
+    )
+    
+    # Relationships
+    teacher = relationship("Teacher", back_populates="daily_allowances")
+
+
+class TeacherMealTransaction(Base):
+    """Teacher meal purchase transaction."""
+    __tablename__ = "teacher_meal_transactions"
+    
+    transaction_id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    teacher_id = Column(PGUUID(as_uuid=True), ForeignKey("teachers.teacher_id"), nullable=False)
+    program_id = Column(PGUUID(as_uuid=True), ForeignKey("programs.program_id"), nullable=True)
+    amount = Column(Numeric(10, 2), nullable=False)
+    balance_after = Column(Numeric(10, 2), nullable=False)
+    scanned_by = Column(Text, nullable=False)
+    location = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    
+    # Relationships
+    teacher = relationship("Teacher", back_populates="meal_transactions")
+    program = relationship("Program")

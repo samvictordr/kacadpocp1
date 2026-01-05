@@ -9,10 +9,12 @@ from app.db.postgres import get_postgres_session
 from app.db.mongodb import get_mongodb
 from app.db.redis import get_redis, RedisClient
 from app.services.attendance_service import AttendanceService
+from app.services.store_service import StoreService
 from app.schemas.api_schemas import (
     StartAttendanceSessionRequest, StartAttendanceSessionResponse,
     AttendanceScanRequest, AttendanceScanResponse,
     ClassResponse, TeacherClassesResponse,
+    TeacherMealQRResponse, TeacherBalanceResponse,
     ErrorResponse, TokenPayload
 )
 from app.api.dependencies import require_teacher
@@ -119,3 +121,64 @@ async def scan_attendance(
         )
     
     return AttendanceScanResponse(**data)
+
+
+@router.get(
+    "/meal-qr",
+    response_model=TeacherMealQRResponse,
+    responses={404: {"model": ErrorResponse}}
+)
+async def get_meal_qr(
+    current_user: TokenPayload = Depends(require_teacher),
+    pg: AsyncSession = Depends(get_postgres_session),
+    mongo: AsyncIOMotorDatabase = Depends(get_mongodb),
+    redis: RedisClient = Depends(get_redis)
+):
+    """
+    Get QR code data for teacher meal purchases.
+    Shows current balance.
+    """
+    service = StoreService(pg, mongo, redis)
+    result = await service.generate_teacher_meal_qr(current_user.user_id)
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Teacher record not found or no meal allowance set"
+        )
+    
+    return TeacherMealQRResponse(**result)
+
+
+@router.get(
+    "/balance",
+    response_model=TeacherBalanceResponse,
+    responses={404: {"model": ErrorResponse}}
+)
+async def get_balance(
+    current_user: TokenPayload = Depends(require_teacher),
+    pg: AsyncSession = Depends(get_postgres_session),
+    mongo: AsyncIOMotorDatabase = Depends(get_mongodb),
+    redis: RedisClient = Depends(get_redis)
+):
+    """
+    Get the teacher's current meal balance for today.
+    """
+    service = StoreService(pg, mongo, redis)
+    teacher = await service.get_teacher_by_user_id(current_user.user_id)
+    
+    if not teacher:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Teacher record not found"
+        )
+    
+    balance = await service.get_teacher_balance(teacher.teacher_id)
+    
+    if not balance:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No meal allowance set for today"
+        )
+    
+    return TeacherBalanceResponse(**balance)
