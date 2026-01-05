@@ -276,39 +276,53 @@ async def get_all_students():
 
 @router.get("/api/teachers")
 async def get_all_teachers():
-    """Get all teachers."""
+    """Get all teachers from MongoDB."""
     try:
+        if mongodb.db is None:
+            raise HTTPException(status_code=503, detail="MongoDB not connected")
+            
+        # Teachers are only in MongoDB
+        teachers_cursor = mongodb.db.users.find({"role": "teacher"})
+        teachers = await teachers_cursor.to_list(length=None)
+        
+        # Get program names for teachers
         async with async_session_factory() as session:
-            result = await session.execute(text("""
-                SELECT t.teacher_id, t.user_id, t.full_name, t.employee_id,
-                       t.program_id, t.is_active, p.name as program_name
-                FROM teachers t
-                LEFT JOIN programs p ON t.program_id = p.program_id
-                ORDER BY t.full_name
-            """))
-            rows = result.fetchall()
-            columns = ["teacher_id", "user_id", "full_name", "employee_id", "program_id", "is_active", "program_name"]
-            return [dict(zip(columns, row)) for row in rows]
+            result = await session.execute(text("SELECT program_id, name FROM programs"))
+            programs = {str(row[0]): row[1] for row in result.fetchall()}
+        
+        # Format teacher data
+        formatted_teachers = []
+        for teacher in teachers:
+            formatted_teachers.append({
+                "user_id": teacher.get("user_id"),
+                "full_name": teacher.get("full_name"),
+                "email": teacher.get("email"),
+                "employee_id": teacher.get("employee_id", ""),
+                "program_id": teacher.get("program_id"),
+                "program_name": programs.get(teacher.get("program_id", ""), "N/A"),
+                "is_active": teacher.get("is_active", True)
+            })
+        
+        return sorted(formatted_teachers, key=lambda x: x["full_name"])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/programs")
 async def get_all_programs():
-    """Get all programs."""
+    """Get all programs with student counts."""
     try:
         async with async_session_factory() as session:
+            # Only count students (teachers are in MongoDB only)
             result = await session.execute(text("""
                 SELECT p.program_id, p.name, p.cost_center_code, p.active,
-                       COUNT(DISTINCT s.student_id) as student_count,
-                       COUNT(DISTINCT t.teacher_id) as teacher_count
+                       COUNT(DISTINCT s.student_id) as student_count
                 FROM programs p
                 LEFT JOIN students s ON p.program_id = s.program_id AND s.is_active = true
-                LEFT JOIN teachers t ON p.program_id = t.program_id AND t.is_active = true
                 GROUP BY p.program_id ORDER BY p.name
             """))
             rows = result.fetchall()
-            columns = ["program_id", "name", "cost_center_code", "active", "student_count", "teacher_count"]
+            columns = ["program_id", "name", "cost_center_code", "active", "student_count"]
             return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -343,8 +357,9 @@ async def create_user(data: dict):
             }
         })
         
-        async with async_session_factory() as session:
-            if data["role"] == "student":
+        # Only students have PostgreSQL records
+        if data["role"] == "student":
+            async with async_session_factory() as session:
                 await session.execute(text("""
                     INSERT INTO students (student_id, user_id, full_name, phone_number, program_id, is_active)
                     VALUES (:student_id, :user_id, :full_name, :phone_number, :program_id, true)
@@ -355,18 +370,7 @@ async def create_user(data: dict):
                     "phone_number": data.get("phone_number", ""),
                     "program_id": data.get("program_id")
                 })
-            elif data["role"] == "teacher":
-                await session.execute(text("""
-                    INSERT INTO teachers (teacher_id, user_id, full_name, employee_id, program_id, is_active)
-                    VALUES (:teacher_id, :user_id, :full_name, :employee_id, :program_id, true)
-                """), {
-                    "teacher_id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "full_name": data["full_name"],
-                    "employee_id": data.get("employee_id", ""),
-                    "program_id": data.get("program_id")
-                })
-            await session.commit()
+                await session.commit()
         
         return {"success": True, "user_id": user_id}
     except HTTPException:
@@ -411,12 +415,10 @@ async def delete_user(user_id: str):
             
         await mongodb.db.users.delete_one({"user_id": user_id})
         
+        # Only delete from PostgreSQL if student (teachers/store are MongoDB only)
         async with async_session_factory() as session:
             await session.execute(text(
                 "DELETE FROM students WHERE user_id = :user_id"
-            ), {"user_id": user_id})
-            await session.execute(text(
-                "DELETE FROM teachers WHERE user_id = :user_id"
             ), {"user_id": user_id})
             await session.commit()
         
