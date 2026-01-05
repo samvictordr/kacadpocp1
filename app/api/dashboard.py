@@ -15,6 +15,7 @@ import csv
 from app.db.postgres import async_session_factory
 from app.db.mongodb import mongodb
 from app.db.redis import redis_client
+from app.core.security import verify_password, hash_password
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -322,17 +323,25 @@ async def create_user(data: dict):
             raise HTTPException(status_code=503, detail="MongoDB not connected")
             
         user_id = str(uuid.uuid4())
-        password_hash = hashlib.sha256(data.get("password", "temp123").encode()).hexdigest()
+        password_hash = hash_password(data.get("password", "temp123"))
         
         await mongodb.db.users.insert_one({
             "_id": user_id,
             "user_id": user_id,
             "email": data["email"],
+            "name": data["full_name"],
             "full_name": data["full_name"],
-            "password_hash": password_hash,
             "role": data["role"],
-            "is_active": True,
-            "created_at": datetime.utcnow()
+            "status": "active",
+            "auth": {
+                "password_hash": password_hash,
+                "password_last_changed": datetime.utcnow()
+            },
+            "associations": {},
+            "metadata": {
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
         })
         
         async with async_session_factory() as session:
@@ -626,17 +635,25 @@ async def bulk_upload_students(file: UploadFile = File(...), program_id: str = F
         for row in reader:
             try:
                 user_id = str(uuid.uuid4())
-                password_hash = hashlib.sha256("temp123".encode()).hexdigest()
+                password_hash = hash_password("temp123")
                 
                 await mongodb.db.users.insert_one({
                     "_id": user_id,
                     "user_id": user_id,
                     "email": row["email"],
+                    "name": row["full_name"],
                     "full_name": row["full_name"],
-                    "password_hash": password_hash,
                     "role": "student",
-                    "is_active": True,
-                    "created_at": datetime.utcnow()
+                    "status": "active",
+                    "auth": {
+                        "password_hash": password_hash,
+                        "password_last_changed": datetime.utcnow()
+                    },
+                    "associations": {"program_id": program_id},
+                    "metadata": {
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    }
                 })
                 
                 async with async_session_factory() as session:
@@ -677,17 +694,25 @@ async def bulk_upload_teachers(file: UploadFile = File(...), program_id: str = F
         for row in reader:
             try:
                 user_id = str(uuid.uuid4())
-                password_hash = hashlib.sha256("temp123".encode()).hexdigest()
+                password_hash = hash_password("temp123")
                 
                 await mongodb.db.users.insert_one({
                     "_id": user_id,
                     "user_id": user_id,
                     "email": row["email"],
+                    "name": row["full_name"],
                     "full_name": row["full_name"],
-                    "password_hash": password_hash,
                     "role": "teacher",
-                    "is_active": True,
-                    "created_at": datetime.utcnow()
+                    "status": "active",
+                    "auth": {
+                        "password_hash": password_hash,
+                        "password_last_changed": datetime.utcnow()
+                    },
+                    "associations": {},
+                    "metadata": {
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    }
                 })
                 
                 async with async_session_factory() as session:
@@ -721,16 +746,24 @@ async def admin_login(data: dict):
     try:
         if mongodb.db is None:
             raise HTTPException(status_code=503, detail="MongoDB not connected")
-            
-        password_hash = hashlib.sha256(data.get("password", "").encode()).hexdigest()
         
         user = await mongodb.db.users.find_one({
             "email": data.get("email"),
-            "role": "admin",
-            "is_active": True
+            "role": "admin"
         })
         
-        if not user or user.get("password_hash") != password_hash:
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # Check if user is active (handle both old 'is_active' and new 'status' field)
+        is_active = user.get("is_active", True) if "is_active" in user else user.get("status") == "active"
+        if not is_active:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # Get password hash from nested auth object or top level
+        stored_hash = user.get("auth", {}).get("password_hash") if "auth" in user else user.get("password_hash")
+        
+        if not stored_hash or not verify_password(data.get("password", ""), stored_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         token = str(uuid.uuid4())
@@ -742,7 +775,7 @@ async def admin_login(data: dict):
             "success": True,
             "token": token,
             "email": data.get("email"),
-            "full_name": user.get("full_name", "Admin")
+            "full_name": user.get("name", user.get("full_name", "Admin"))
         }
     except HTTPException:
         raise
