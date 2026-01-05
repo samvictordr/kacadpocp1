@@ -4,8 +4,11 @@ Main FastAPI application entry point.
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 import sys
+import os
 
 from app.core.config import settings
 from app.db.postgres import init_postgres, close_postgres
@@ -18,6 +21,7 @@ from app.api.student import router as student_router
 from app.api.teacher import router as teacher_router
 from app.api.store import router as store_router
 from app.api.admin import router as admin_router
+from app.api.dashboard import router as dashboard_router
 
 
 def _mask_url(url: str) -> str:
@@ -127,6 +131,16 @@ app.include_router(student_router)
 app.include_router(teacher_router)
 app.include_router(store_router)
 app.include_router(admin_router)
+app.include_router(dashboard_router)
+
+
+# Serve dashboard HTML at /dashboard/
+@app.get("/dashboard/", response_class=FileResponse)
+@app.get("/dashboard", response_class=FileResponse)
+async def serve_dashboard():
+    """Serve the admin dashboard HTML."""
+    static_path = os.path.join(os.path.dirname(__file__), "static", "dashboard.html")
+    return FileResponse(static_path, media_type="text/html")
 
 
 @app.get("/")
