@@ -247,8 +247,8 @@
                                     </div>
                                 </div>
                                 <div id="studentFields">
-                                    <label class="block text-sm font-medium mb-1">National ID</label>
-                                    <input type="text" name="national_id" class="w-full">
+                                    <label class="block text-sm font-medium mb-1">Phone Number</label>
+                                    <input type="text" name="phone_number" class="w-full">
                                 </div>
                                 <div id="teacherFields" class="hidden">
                                     <label class="block text-sm font-medium mb-1">Employee ID</label>
@@ -279,7 +279,7 @@
                                     <input type="file" name="file" accept=".csv" required class="w-full">
                                 </div>
                                 <div class="text-sm text-gray-500">
-                                    Required columns: <code>full_name, email, national_id</code>
+                                    Required columns: <code>full_name, email, phone_number</code>
                                 </div>
                                 <button type="submit" class="btn-primary text-white px-6 py-2 rounded-lg">Upload Students</button>
                             </form>
@@ -311,7 +311,7 @@
                         <div class="grid grid-cols-2 gap-6">
                             <div>
                                 <h4 class="font-medium mb-2">Student CSV Template</h4>
-                                <pre class="bg-gray-100 p-3 rounded text-sm overflow-x-auto">full_name,email,national_id
+                                <pre class="bg-gray-100 p-3 rounded text-sm overflow-x-auto">full_name,email,phone_number
 Ahmed Mohammed,ahmed@academy.edu,1234567890
 Sara Abdullah,sara@academy.edu,1234567891</pre>
                             </div>
@@ -727,7 +727,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu,EMP-002</pre>
                 tbody.innerHTML = students.map(s => `
                     <tr>
                         <td>${s.full_name}</td>
-                        <td>${s.national_id || '-'}</td>
+                        <td>${s.phone_number || '-'}</td>
                         <td>${s.program_name || '-'}</td>
                         <td><span class="px-2 py-1 rounded text-xs ${s.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${s.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td>

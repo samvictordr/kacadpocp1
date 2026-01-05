@@ -16,7 +16,7 @@ The admin dashboard supports bulk upload of user data via CSV or Excel (.xlsx) f
 |-------------|------|-------------|---------|
 | `full_name` | String | Student's full name | Ahmed Mohammed Al-Rashid |
 | `email` | String | Valid email address (must be unique) | ahmed.rashid@academy.edu |
-| `national_id` | String | National ID number | 1234567890 |
+| `phone_number` | String | Phone number | +966501234567 |
 
 ### Optional Columns
 
@@ -34,7 +34,7 @@ The admin dashboard supports bulk upload of user data via CSV or Excel (.xlsx) f
 ### Sample CSV
 
 ```csv
-full_name,email,national_id,phone,date_of_birth,gender
+full_name,email,phone_number,phone,date_of_birth,gender
 Ahmed Mohammed Al-Rashid,ahmed.rashid@academy.edu,1234567890,+966501234567,2000-05-15,M
 Sara Abdullah Al-Qahtani,sara.qahtani@academy.edu,1234567891,+966502345678,2001-03-22,F
 Omar Hassan Al-Otaibi,omar.otaibi@academy.edu,1234567892,+966503456789,1999-11-08,M

@@ -261,14 +261,14 @@ async def get_all_students():
     try:
         async with async_session_factory() as session:
             result = await session.execute(text("""
-                SELECT s.student_id, s.user_id, s.full_name, s.national_id,
+                SELECT s.student_id, s.user_id, s.full_name, s.phone_number,
                        s.program_id, s.is_active, p.name as program_name
                 FROM students s
                 LEFT JOIN programs p ON s.program_id = p.program_id
                 ORDER BY s.full_name
             """))
             rows = result.fetchall()
-            columns = ["student_id", "user_id", "full_name", "national_id", "program_id", "is_active", "program_name"]
+            columns = ["student_id", "user_id", "full_name", "phone_number", "program_id", "is_active", "program_name"]
             return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -346,13 +346,13 @@ async def create_user(data: dict):
         async with async_session_factory() as session:
             if data["role"] == "student":
                 await session.execute(text("""
-                    INSERT INTO students (student_id, user_id, full_name, national_id, program_id, is_active)
-                    VALUES (:student_id, :user_id, :full_name, :national_id, :program_id, true)
+                    INSERT INTO students (student_id, user_id, full_name, phone_number, program_id, is_active)
+                    VALUES (:student_id, :user_id, :full_name, :phone_number, :program_id, true)
                 """), {
                     "student_id": str(uuid.uuid4()),
                     "user_id": user_id,
                     "full_name": data["full_name"],
-                    "national_id": data.get("national_id", ""),
+                    "phone_number": data.get("phone_number", ""),
                     "program_id": data.get("program_id")
                 })
             elif data["role"] == "teacher":
@@ -654,13 +654,13 @@ async def bulk_upload_students(file: UploadFile = File(...), program_id: str = F
                 
                 async with async_session_factory() as session:
                     await session.execute(text("""
-                        INSERT INTO students (student_id, user_id, full_name, national_id, program_id, is_active)
-                        VALUES (:student_id, :user_id, :full_name, :national_id, :program_id, true)
+                        INSERT INTO students (student_id, user_id, full_name, phone_number, program_id, is_active)
+                        VALUES (:student_id, :user_id, :full_name, :phone_number, :program_id, true)
                     """), {
                         "student_id": str(uuid.uuid4()),
                         "user_id": user_id,
                         "full_name": row["full_name"],
-                        "national_id": row.get("national_id", ""),
+                        "phone_number": row.get("phone_number", ""),
                         "program_id": program_id
                     })
                     await session.commit()

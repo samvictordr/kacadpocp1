@@ -28,6 +28,7 @@ CREATE TABLE students (
     student_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID UNIQUE NOT NULL,
     full_name TEXT NOT NULL,
+    phone_number TEXT,
     program_id UUID NOT NULL REFERENCES programs(program_id),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
