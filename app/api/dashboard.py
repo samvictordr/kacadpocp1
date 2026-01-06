@@ -96,13 +96,13 @@ async def get_dashboard_stats():
             
             result = await session.execute(text("""
                 SELECT COUNT(*) FROM store_transactions 
-                WHERE DATE(created_at) = CURRENT_DATE
+                WHERE DATE(transaction_time) = CURRENT_DATE
             """))
             stats["transactions_today"] = result.scalar() or 0
             
             result = await session.execute(text("""
-                SELECT COALESCE(SUM(amount), 0) FROM store_transactions 
-                WHERE DATE(created_at) = CURRENT_DATE
+                SELECT COALESCE(SUM(total_amount), 0) FROM store_transactions 
+                WHERE DATE(transaction_time) = CURRENT_DATE
             """))
             stats["revenue_today"] = float(result.scalar() or 0)
             
@@ -152,17 +152,17 @@ async def get_telemetry():
             metrics["postgres"]["table_counts"] = {r[0]: r[1] for r in rows}
             
             result = await session.execute(text("""
-                SELECT COUNT(*) FROM store_transactions WHERE DATE(created_at) = CURRENT_DATE
+                SELECT COUNT(*) FROM store_transactions WHERE DATE(transaction_time) = CURRENT_DATE
             """))
             metrics["transactions"]["today"] = result.scalar() or 0
             
             result = await session.execute(text("""
-                SELECT COUNT(*) FROM store_transactions WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                SELECT COUNT(*) FROM store_transactions WHERE transaction_time >= CURRENT_DATE - INTERVAL '7 days'
             """))
             metrics["transactions"]["week"] = result.scalar() or 0
             
             result = await session.execute(text("""
-                SELECT COUNT(*) FROM store_transactions WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+                SELECT COUNT(*) FROM store_transactions WHERE transaction_time >= CURRENT_DATE - INTERVAL '30 days'
             """))
             metrics["transactions"]["month"] = result.scalar() or 0
             
@@ -205,11 +205,11 @@ async def get_transaction_trends():
     try:
         async with async_session_factory() as session:
             result = await session.execute(text("""
-                SELECT DATE(created_at) as date, COUNT(*) as count,
-                       COALESCE(SUM(amount), 0) as total
+                SELECT DATE(transaction_time) as date, COUNT(*) as count,
+                       COALESCE(SUM(total_amount), 0) as total
                 FROM store_transactions
-                WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-                GROUP BY DATE(created_at) ORDER BY date
+                WHERE transaction_time >= CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY DATE(transaction_time) ORDER BY date
             """))
             rows = result.fetchall()
             return [{"date": str(r[0]), "count": r[1], "total": float(r[2])} for r in rows]
@@ -276,53 +276,40 @@ async def get_all_students():
 
 @router.get("/api/teachers")
 async def get_all_teachers():
-    """Get all teachers from MongoDB."""
+    """Get all teachers."""
     try:
-        if mongodb.db is None:
-            raise HTTPException(status_code=503, detail="MongoDB not connected")
-            
-        # Teachers are only in MongoDB
-        teachers_cursor = mongodb.db.users.find({"role": "teacher"})
-        teachers = await teachers_cursor.to_list(length=None)
-        
-        # Get program names for teachers
         async with async_session_factory() as session:
-            result = await session.execute(text("SELECT program_id, name FROM programs"))
-            programs = {str(row[0]): row[1] for row in result.fetchall()}
-        
-        # Format teacher data
-        formatted_teachers = []
-        for teacher in teachers:
-            formatted_teachers.append({
-                "user_id": teacher.get("user_id"),
-                "full_name": teacher.get("full_name"),
-                "email": teacher.get("email"),
-                "employee_id": teacher.get("employee_id", ""),
-                "program_id": teacher.get("program_id"),
-                "program_name": programs.get(teacher.get("program_id", ""), "N/A"),
-                "is_active": teacher.get("is_active", True)
-            })
-        
-        return sorted(formatted_teachers, key=lambda x: x["full_name"])
+            result = await session.execute(text("""
+                SELECT t.teacher_id, t.user_id, t.full_name, t.employee_id,
+                       t.program_id, t.is_active, p.name as program_name
+                FROM teachers t
+                LEFT JOIN programs p ON t.program_id = p.program_id
+                ORDER BY t.full_name
+            """))
+            rows = result.fetchall()
+            columns = ["teacher_id", "user_id", "full_name", "employee_id", "program_id", "is_active", "program_name"]
+            return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/programs")
 async def get_all_programs():
-    """Get all programs with student counts."""
+    """Get all programs."""
     try:
         async with async_session_factory() as session:
-            # Only count students (teachers are in MongoDB only)
             result = await session.execute(text("""
-                SELECT p.program_id, p.name, p.cost_center_code, p.active,
-                       COUNT(DISTINCT s.student_id) as student_count
+                SELECT p.program_id, p.name, p.cost_center, 
+                       p.default_daily_allowance, p.is_active,
+                       COUNT(DISTINCT s.student_id) as student_count,
+                       COUNT(DISTINCT t.teacher_id) as teacher_count
                 FROM programs p
                 LEFT JOIN students s ON p.program_id = s.program_id AND s.is_active = true
+                LEFT JOIN teachers t ON p.program_id = t.program_id AND t.is_active = true
                 GROUP BY p.program_id ORDER BY p.name
             """))
             rows = result.fetchall()
-            columns = ["program_id", "name", "cost_center_code", "active", "student_count"]
+            columns = ["program_id", "name", "cost_center", "default_daily_allowance", "is_active", "student_count", "teacher_count"]
             return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -357,9 +344,8 @@ async def create_user(data: dict):
             }
         })
         
-        # Only students have PostgreSQL records
-        if data["role"] == "student":
-            async with async_session_factory() as session:
+        async with async_session_factory() as session:
+            if data["role"] == "student":
                 await session.execute(text("""
                     INSERT INTO students (student_id, user_id, full_name, phone_number, program_id, is_active)
                     VALUES (:student_id, :user_id, :full_name, :phone_number, :program_id, true)
@@ -370,7 +356,18 @@ async def create_user(data: dict):
                     "phone_number": data.get("phone_number", ""),
                     "program_id": data.get("program_id")
                 })
-                await session.commit()
+            elif data["role"] == "teacher":
+                await session.execute(text("""
+                    INSERT INTO teachers (teacher_id, user_id, full_name, employee_id, program_id, is_active)
+                    VALUES (:teacher_id, :user_id, :full_name, :employee_id, :program_id, true)
+                """), {
+                    "teacher_id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "full_name": data["full_name"],
+                    "employee_id": data.get("employee_id", ""),
+                    "program_id": data.get("program_id")
+                })
+            await session.commit()
         
         return {"success": True, "user_id": user_id}
     except HTTPException:
@@ -415,10 +412,12 @@ async def delete_user(user_id: str):
             
         await mongodb.db.users.delete_one({"user_id": user_id})
         
-        # Only delete from PostgreSQL if student (teachers/store are MongoDB only)
         async with async_session_factory() as session:
             await session.execute(text(
                 "DELETE FROM students WHERE user_id = :user_id"
+            ), {"user_id": user_id})
+            await session.execute(text(
+                "DELETE FROM teachers WHERE user_id = :user_id"
             ), {"user_id": user_id})
             await session.commit()
         
@@ -439,12 +438,13 @@ async def create_program(data: dict):
         
         async with async_session_factory() as session:
             await session.execute(text("""
-                INSERT INTO programs (program_id, name, cost_center_code, active)
-                VALUES (:program_id, :name, :cost_center_code, true)
+                INSERT INTO programs (program_id, name, cost_center, default_daily_allowance, is_active)
+                VALUES (:program_id, :name, :cost_center, :default_daily_allowance, true)
             """), {
                 "program_id": program_id,
                 "name": data["name"],
-                "cost_center_code": data.get("cost_center_code", "DEFAULT")
+                "cost_center": data["cost_center"],
+                "default_daily_allowance": float(data.get("default_daily_allowance", 50.0))
             })
             await session.commit()
         
@@ -459,12 +459,14 @@ async def update_program(program_id: str, data: dict):
     try:
         async with async_session_factory() as session:
             await session.execute(text("""
-                UPDATE programs SET name = :name, cost_center_code = :cost_center_code, 
-                active = :active WHERE program_id = :program_id
+                UPDATE programs SET name = :name, cost_center = :cost_center, 
+                default_daily_allowance = :default_daily_allowance, is_active = :is_active 
+                WHERE program_id = :program_id
             """), {
                 "name": data["name"],
-                "cost_center_code": data.get("cost_center_code", "DEFAULT"),
-                "active": data.get("active", True),
+                "cost_center": data["cost_center"],
+                "default_daily_allowance": float(data.get("default_daily_allowance", 50.0)),
+                "is_active": data.get("is_active", True),
                 "program_id": program_id
             })
             await session.commit()

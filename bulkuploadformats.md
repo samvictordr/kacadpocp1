@@ -34,10 +34,10 @@ The admin dashboard supports bulk upload of user data via CSV or Excel (.xlsx) f
 ### Sample CSV
 
 ```csv
-full_name,email,phone_number,phone,date_of_birth,gender
-Ahmed Mohammed Al-Rashid,ahmed.rashid@academy.edu,1234567890,+966501234567,2000-05-15,M
-Sara Abdullah Al-Qahtani,sara.qahtani@academy.edu,1234567891,+966502345678,2001-03-22,F
-Omar Hassan Al-Otaibi,omar.otaibi@academy.edu,1234567892,+966503456789,1999-11-08,M
+full_name,email,phone_number,date_of_birth,gender
+Ahmed Mohammed Al-Rashid,ahmed.rashid@academy.edu,+966501234567,2000-05-15,M
+Sara Abdullah Al-Qahtani,sara.qahtani@academy.edu,+966502345678,2001-03-22,F
+Omar Hassan Al-Otaibi,omar.otaibi@academy.edu,+966503456789,1999-11-08,M
 ```
 
 ### Notes for Student Upload
