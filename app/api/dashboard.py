@@ -598,6 +598,101 @@ async def delete_program(program_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== CLASSES ====================
+
+@router.get("/api/classes")
+async def get_all_classes(program_id: Optional[str] = None):
+    """Get all classes, optionally filtered by program."""
+    try:
+        async with async_session_factory() as session:
+            if program_id:
+                result = await session.execute(text("""
+                    SELECT c.class_id, c.name, c.program_id, c.teacher_id, c.active,
+                           p.name as program_name, t.full_name as teacher_name
+                    FROM classes c
+                    LEFT JOIN programs p ON c.program_id = p.program_id
+                    LEFT JOIN teachers t ON c.teacher_id = t.user_id
+                    WHERE c.program_id = :program_id
+                    ORDER BY p.name, c.name
+                """), {"program_id": program_id})
+            else:
+                result = await session.execute(text("""
+                    SELECT c.class_id, c.name, c.program_id, c.teacher_id, c.active,
+                           p.name as program_name, t.full_name as teacher_name
+                    FROM classes c
+                    LEFT JOIN programs p ON c.program_id = p.program_id
+                    LEFT JOIN teachers t ON c.teacher_id = t.user_id
+                    ORDER BY p.name, c.name
+                """))
+            rows = result.fetchall()
+            columns = ["class_id", "name", "program_id", "teacher_id", "active", "program_name", "teacher_name"]
+            return [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/classes")
+async def create_class(data: dict):
+    """Create a new class."""
+    try:
+        class_id = str(uuid.uuid4())
+        async with async_session_factory() as session:
+            await session.execute(text("""
+                INSERT INTO classes (class_id, name, program_id, teacher_id, active)
+                VALUES (:class_id, :name, :program_id, :teacher_id, true)
+            """), {
+                "class_id": class_id,
+                "name": data["name"],
+                "program_id": data["program_id"],
+                "teacher_id": data["teacher_id"]
+            })
+            await session.commit()
+        return {"success": True, "class_id": class_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/api/classes/{class_id}")
+async def delete_class(class_id: str):
+    """Delete a class."""
+    try:
+        async with async_session_factory() as session:
+            # Check for enrollments
+            result = await session.execute(text(
+                "SELECT COUNT(*) FROM class_enrollments WHERE class_id = :class_id"
+            ), {"class_id": class_id})
+            enrollment_count = result.scalar()
+            
+            if enrollment_count > 0:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Cannot delete class with {enrollment_count} enrolled students. Remove enrollments first."
+                )
+            
+            # Check for attendance sessions
+            result = await session.execute(text(
+                "SELECT COUNT(*) FROM attendance_sessions WHERE class_id = :class_id"
+            ), {"class_id": class_id})
+            session_count = result.scalar()
+            
+            if session_count > 0:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Cannot delete class with {session_count} attendance sessions. Archive it instead."
+                )
+            
+            await session.execute(text(
+                "DELETE FROM classes WHERE class_id = :class_id"
+            ), {"class_id": class_id})
+            await session.commit()
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== ALLOWANCES ====================
 
 @router.get("/api/allowances")

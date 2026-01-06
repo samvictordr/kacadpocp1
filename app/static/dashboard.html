@@ -651,6 +651,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     <div class="flex gap-1 mb-6 border-b border-enterprise-200">
                         <button class="tab-btn active" data-tab="viewPrograms">All Programs</button>
                         <button class="tab-btn" data-tab="createProgram">Create Program</button>
+                        <button class="tab-btn" data-tab="manageClasses">Manage Classes</button>
                     </div>
                     
                     <div id="tab-viewPrograms" class="tab-content">
@@ -693,22 +694,80 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                             </form>
                         </div>
                     </div>
+
+                    <div id="tab-manageClasses" class="tab-content hidden">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                            <!-- Classes List -->
+                            <div class="card">
+                                <div class="p-4 border-b border-enterprise-100 flex justify-between items-center">
+                                    <span class="font-medium text-enterprise-800">Classes</span>
+                                    <button onclick="loadClasses()" class="btn-secondary" style="display: flex; align-items: center; gap: 8px;">
+                                        <i class="fa-solid fa-rotate-right" style="font-size: 12px;"></i> Refresh
+                                    </button>
+                                </div>
+                                <div class="p-4">
+                                    <div style="margin-bottom: 16px;">
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Filter by Program</label>
+                                        <select id="classFilterProgram" onchange="loadClasses()" class="w-full">
+                                            <option value="">All Programs</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table>
+                                        <thead><tr><th>Class Name</th><th>Program</th><th>Teacher</th><th>Status</th><th>Actions</th></tr></thead>
+                                        <tbody id="classesTable"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Create Class Form -->
+                            <div class="card p-6">
+                                <div class="mb-6">
+                                    <h3 class="font-semibold text-enterprise-900">Create New Class</h3>
+                                    <p class="text-sm text-enterprise-500">Add a class under a program</p>
+                                </div>
+                                <form id="createClassForm" class="space-y-5">
+                                    <div>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Class Name <span class="text-danger">*</span></label>
+                                        <input type="text" name="name" required class="w-full" placeholder="e.g., Section A - Morning">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Program <span class="text-danger">*</span></label>
+                                        <select name="program_id" required class="w-full" id="classFormProgram">
+                                            <option value="">Select Program</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Teacher <span class="text-danger">*</span></label>
+                                        <select name="teacher_id" required class="w-full" id="classFormTeacher">
+                                            <option value="">Select Teacher</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="btn-primary">Create Class</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Telemetry Page -->
                 <div id="page-telemetry" class="page-content hidden">
-                    <div class="grid grid-cols-3 gap-6 mb-6">
-                        <div class="card p-6">
-                            <div class="flex items-center gap-3 mb-5">
-                                <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                                    <i class="fa-solid fa-database text-blue-600"></i>
-                                </div>
-                                <h3 class="font-semibold text-enterprise-900">PostgreSQL</h3>
+                    <!-- PostgreSQL - Wide card at top -->
+                    <div class="card p-6 mb-6">
+                        <div class="flex items-center gap-3 mb-5">
+                            <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                                <i class="fa-solid fa-database text-blue-600"></i>
                             </div>
-                            <div class="space-y-2 text-sm" id="pgTelemetry">
-                                <div class="loading"></div>
-                            </div>
+                            <h3 class="font-semibold text-enterprise-900">PostgreSQL Database</h3>
                         </div>
+                        <div id="pgTelemetry" style="display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start;">
+                            <div class="loading"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- MongoDB and Redis - 2 column grid below -->
+                    <div class="grid grid-cols-2 gap-6 mb-6">
                         <div class="card p-6">
                             <div class="flex items-center gap-3 mb-5">
                                 <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
@@ -817,6 +876,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             document.getElementById('bulkAllowanceForm').addEventListener('submit', handleBulkAllowance);
             document.getElementById('createProgramForm').addEventListener('submit', handleCreateProgram);
             document.getElementById('addSupplementForm').addEventListener('submit', handleAddSupplement);
+            document.getElementById('createClassForm').addEventListener('submit', handleCreateClass);
             
             // Set default date for supplement
             document.getElementById('supplementDate').valueAsDate = new Date();
@@ -904,7 +964,12 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             if (page === 'users') { loadStudents(); loadTeachers(); loadPrograms().then(() => loadProgramSelects()); }
             if (page === 'bulk') { loadPrograms().then(() => loadProgramSelects()); }
             if (page === 'allowances') { loadStudentSelect(); loadPrograms().then(() => loadProgramSelects()); updateSupplementTargets(); }
-            if (page === 'programs') { loadPrograms(); }
+            if (page === 'programs') { 
+                loadPrograms().then(() => {
+                    loadTeachers().then(() => loadClassFormSelects());
+                });
+                loadClasses();
+            }
             if (page === 'telemetry') { loadTelemetry(); }
         }
 
@@ -1179,19 +1244,30 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const res = await fetch(`${API_BASE}/telemetry`);
                 const data = await res.json();
                 
+                // PostgreSQL - wide layout with tables in grid
+                const tableEntries = Object.entries(data.postgres.table_counts);
                 document.getElementById('pgTelemetry').innerHTML = `
-                    <div class="flex justify-between py-2 border-b border-enterprise-100">
-                        <span class="text-enterprise-600">Database Size</span>
-                        <span class="font-medium text-enterprise-900">${data.postgres.database_size}</span>
+                    <div style="padding-right: 24px; border-right: 1px solid #e2e8f0;">
+                        <div class="text-enterprise-600 text-xs uppercase tracking-wide mb-3">Database Info</div>
+                        <div class="flex justify-between py-2">
+                            <span class="text-enterprise-600">Database Size</span>
+                            <span class="font-semibold text-enterprise-900">${data.postgres.database_size}</span>
+                        </div>
+                        <div class="flex justify-between py-2">
+                            <span class="text-enterprise-600">Total Tables</span>
+                            <span class="font-semibold text-enterprise-900">${tableEntries.length}</span>
+                        </div>
                     </div>
-                    <div class="pt-2">
-                        <span class="text-enterprise-600 text-xs uppercase tracking-wide">Tables</span>
-                        ${Object.entries(data.postgres.table_counts).map(([k,v]) => `
-                            <div class="flex justify-between py-1.5 text-enterprise-600">
-                                <span>${k}</span>
-                                <span class="mono">${v} rows</span>
-                            </div>
-                        `).join('')}
+                    <div>
+                        <div class="text-enterprise-600 text-xs uppercase tracking-wide mb-3">Table Row Counts</div>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+                            ${tableEntries.map(([k,v]) => `
+                                <div style="background: #f8fafc; padding: 12px; border-radius: 8px;">
+                                    <div class="text-xs text-enterprise-500 mb-1">${k}</div>
+                                    <div class="font-semibold text-enterprise-900">${v} rows</div>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
                 `;
                 
@@ -1483,6 +1559,85 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 }
             } catch (e) {
                 showToast('Failed to delete program', 'error');
+            }
+        }
+
+        // ===== CLASS MANAGEMENT =====
+        let classes = [];
+        
+        async function loadClasses() {
+            try {
+                const filterProgram = document.getElementById('classFilterProgram').value;
+                let url = `${API_BASE}/classes`;
+                if (filterProgram) url += `?program_id=${filterProgram}`;
+                
+                const res = await fetch(url);
+                classes = await res.json();
+                
+                const tbody = document.getElementById('classesTable');
+                tbody.innerHTML = classes.map(c => `
+                    <tr>
+                        <td class="font-medium">${c.name}</td>
+                        <td>${c.program_name || 'N/A'}</td>
+                        <td>${c.teacher_name || 'Unassigned'}</td>
+                        <td><span class="badge ${c.active ? 'badge-success' : 'badge-danger'}">${c.active ? 'Active' : 'Inactive'}</span></td>
+                        <td>
+                            <button onclick="deleteClass('${c.class_id}')" class="action-link action-link-danger">Delete</button>
+                        </td>
+                    </tr>
+                `).join('') || '<tr><td colspan="5" class="text-center text-enterprise-500 py-8">No classes found</td></tr>';
+            } catch (e) {
+                console.error('Load classes failed:', e);
+            }
+        }
+
+        function loadClassFormSelects() {
+            // Populate program dropdown for class form
+            const programOptions = programs.map(p => `<option value="${p.program_id}">${p.name}</option>`).join('');
+            document.getElementById('classFormProgram').innerHTML = '<option value="">Select Program</option>' + programOptions;
+            document.getElementById('classFilterProgram').innerHTML = '<option value="">All Programs</option>' + programOptions;
+            
+            // Populate teacher dropdown for class form
+            const teacherOptions = teachers.map(t => `<option value="${t.user_id}">${t.full_name}</option>`).join('');
+            document.getElementById('classFormTeacher').innerHTML = '<option value="">Select Teacher</option>' + teacherOptions;
+        }
+
+        async function handleCreateClass(e) {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            
+            try {
+                const res = await fetch(`${API_BASE}/classes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    showToast('Class created successfully!', 'success');
+                    e.target.reset();
+                    loadClasses();
+                } else {
+                    showToast(result.detail || 'Failed to create class', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteClass(classId) {
+            if (!confirm('Are you sure you want to delete this class?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/classes/${classId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    showToast('Class deleted successfully', 'success');
+                    loadClasses();
+                } else {
+                    const result = await res.json();
+                    showToast(result.detail || 'Cannot delete class', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to delete class', 'error');
             }
         }
 
