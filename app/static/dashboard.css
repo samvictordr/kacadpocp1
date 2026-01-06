@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
 /* Core palette */
 :root {
     --surface: #ffffff;
@@ -21,6 +23,16 @@
     font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     letter-spacing: 0.01em;
+}
+
+.icon,
+.fa-solid,
+.fa-regular,
+.fa-light,
+.fa-duotone,
+.fa-brands {
+    width: 1.1em;
+    height: 1.1em;
 }
 
 code,
@@ -66,7 +78,8 @@ a {
     border-left-color: var(--accent);
 }
 
-.sidebar-item.active i {
+.sidebar-item.active i,
+.sidebar-item.active .icon {
     color: var(--accent);
 }
 
