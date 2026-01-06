@@ -358,8 +358,8 @@ async def create_user(data: dict):
                 })
             elif data["role"] == "teacher":
                 await session.execute(text("""
-                    INSERT INTO teachers (teacher_id, user_id, full_name, employee_id, program_id, is_active)
-                    VALUES (:teacher_id, :user_id, :full_name, :employee_id, :program_id, true)
+                    INSERT INTO teachers (teacher_id, user_id, full_name, employee_id, program_id, is_active, created_at)
+                    VALUES (:teacher_id, :user_id, :full_name, :employee_id, :program_id, true, NOW())
                 """), {
                     "teacher_id": str(uuid.uuid4()),
                     "user_id": user_id,
@@ -435,15 +435,17 @@ async def create_program(data: dict):
     """Create a program."""
     try:
         program_id = str(uuid.uuid4())
+        cost_center = data.get("cost_center", data.get("cost_center_code", "GEN-001"))
         
         async with async_session_factory() as session:
             await session.execute(text("""
-                INSERT INTO programs (program_id, name, cost_center, default_daily_allowance, is_active)
-                VALUES (:program_id, :name, :cost_center, :default_daily_allowance, true)
+                INSERT INTO programs (program_id, name, cost_center_code, cost_center, default_daily_allowance, is_active, active)
+                VALUES (:program_id, :name, :cost_center_code, :cost_center, :default_daily_allowance, true, true)
             """), {
                 "program_id": program_id,
                 "name": data["name"],
-                "cost_center": data["cost_center"],
+                "cost_center_code": cost_center,
+                "cost_center": cost_center,
                 "default_daily_allowance": float(data.get("default_daily_allowance", 50.0))
             })
             await session.commit()
@@ -457,16 +459,20 @@ async def create_program(data: dict):
 async def update_program(program_id: str, data: dict):
     """Update a program."""
     try:
+        cost_center = data.get("cost_center", data.get("cost_center_code", "GEN-001"))
+        is_active = data.get("is_active", True)
         async with async_session_factory() as session:
             await session.execute(text("""
-                UPDATE programs SET name = :name, cost_center = :cost_center, 
-                default_daily_allowance = :default_daily_allowance, is_active = :is_active 
+                UPDATE programs SET name = :name, cost_center = :cost_center, cost_center_code = :cost_center_code,
+                default_daily_allowance = :default_daily_allowance, is_active = :is_active, active = :active 
                 WHERE program_id = :program_id
             """), {
                 "name": data["name"],
-                "cost_center": data["cost_center"],
+                "cost_center": cost_center,
+                "cost_center_code": cost_center,
                 "default_daily_allowance": float(data.get("default_daily_allowance", 50.0)),
-                "is_active": data.get("is_active", True),
+                "is_active": is_active,
+                "active": is_active,
                 "program_id": program_id
             })
             await session.commit()
@@ -535,12 +541,17 @@ async def set_allowance(data: dict):
     try:
         base = float(data["base_amount"])
         bonus = float(data.get("bonus_amount", 0))
+        # Convert date string to date object if needed
+        allowance_date = data["date"]
+        if isinstance(allowance_date, str):
+            from datetime import date as date_type
+            allowance_date = date_type.fromisoformat(allowance_date)
         
         async with async_session_factory() as session:
             result = await session.execute(text("""
                 SELECT allowance_id FROM daily_allowances 
                 WHERE student_id = :student_id AND date = :date
-            """), {"student_id": data["student_id"], "date": data["date"]})
+            """), {"student_id": data["student_id"], "date": allowance_date})
             existing = result.scalar()
             
             if existing:
@@ -549,7 +560,7 @@ async def set_allowance(data: dict):
                     WHERE student_id=:student_id AND date=:date
                 """), {
                     "base": base, "bonus": bonus, "total": base + bonus,
-                    "student_id": data["student_id"], "date": data["date"]
+                    "student_id": data["student_id"], "date": allowance_date
                 })
             else:
                 await session.execute(text("""
@@ -558,7 +569,7 @@ async def set_allowance(data: dict):
                 """), {
                     "allowance_id": str(uuid.uuid4()),
                     "student_id": data["student_id"],
-                    "date": data["date"],
+                    "date": allowance_date,
                     "base": base, "bonus": bonus, "total": base + bonus
                 })
             await session.commit()
@@ -575,6 +586,11 @@ async def bulk_allowances(data: dict):
         base = float(data["base_amount"])
         bonus = float(data.get("bonus_amount", 0))
         count = 0
+        # Convert date string to date object if needed
+        allowance_date = data["date"]
+        if isinstance(allowance_date, str):
+            from datetime import date as date_type
+            allowance_date = date_type.fromisoformat(allowance_date)
         
         async with async_session_factory() as session:
             result = await session.execute(text(
@@ -588,7 +604,7 @@ async def bulk_allowances(data: dict):
                 result = await session.execute(text("""
                     SELECT allowance_id FROM daily_allowances 
                     WHERE student_id = :student_id AND date = :date
-                """), {"student_id": student_id, "date": data["date"]})
+                """), {"student_id": student_id, "date": allowance_date})
                 existing = result.scalar()
                 
                 if existing:
@@ -597,7 +613,7 @@ async def bulk_allowances(data: dict):
                         WHERE student_id=:student_id AND date=:date
                     """), {
                         "base": base, "bonus": bonus, "total": base + bonus,
-                        "student_id": student_id, "date": data["date"]
+                        "student_id": student_id, "date": allowance_date
                     })
                 else:
                     await session.execute(text("""
@@ -606,7 +622,7 @@ async def bulk_allowances(data: dict):
                     """), {
                         "allowance_id": str(uuid.uuid4()),
                         "student_id": student_id,
-                        "date": data["date"],
+                        "date": allowance_date,
                         "base": base, "bonus": bonus, "total": base + bonus
                     })
                 count += 1
@@ -717,8 +733,8 @@ async def bulk_upload_teachers(file: UploadFile = File(...), program_id: str = F
                 
                 async with async_session_factory() as session:
                     await session.execute(text("""
-                        INSERT INTO teachers (teacher_id, user_id, full_name, employee_id, program_id, is_active)
-                        VALUES (:teacher_id, :user_id, :full_name, :employee_id, :program_id, true)
+                        INSERT INTO teachers (teacher_id, user_id, full_name, employee_id, program_id, is_active, created_at)
+                        VALUES (:teacher_id, :user_id, :full_name, :employee_id, :program_id, true, NOW())
                     """), {
                         "teacher_id": str(uuid.uuid4()),
                         "user_id": user_id,
