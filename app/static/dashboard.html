@@ -81,6 +81,8 @@
         .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
         .badge-success { background: rgba(16,185,129,0.12); color: #047857; }
         .badge-danger { background: rgba(239,68,68,0.12); color: #b91c1c; }
+        .badge-info { background: rgba(59,130,246,0.12); color: #1d4ed8; }
+        .badge-primary { background: rgba(99,102,241,0.12); color: #4338ca; }
         .tab-btn { padding: 12px 16px; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; background: none; border-top: none; border-left: none; border-right: none; cursor: pointer; transition: all 0.15s; }
         .tab-btn:hover { color: #1e293b; }
         .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
@@ -412,9 +414,14 @@
                                         </select>
                                     </div>
                                     <div id="programSelectContainer">
-                                        <label>Program</label>
+                                        <label>Program <span id="programRequiredStar" style="color: #dc2626;">*</span></label>
                                         <select name="program_id" id="createUserProgram"></select>
                                     </div>
+                                </div>
+                                <div id="teacherProgramsContainer" class="hidden" style="margin-bottom: 20px;">
+                                    <label>Programs <span style="font-weight: normal; color: #64748b;">(Teachers can be assigned to multiple programs)</span></label>
+                                    <select name="program_ids" id="createUserProgramsMulti" multiple style="min-height: 100px;"></select>
+                                    <p style="font-size: 12px; color: #64748b; margin-top: 6px;">Hold Ctrl/Cmd to select multiple programs</p>
                                 </div>
                                 <div id="studentFields" style="margin-bottom: 20px;">
                                     <label>Phone Number</label>
@@ -531,14 +538,20 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     
                     <div id="tab-viewAllowances" class="tab-content">
                         <div class="card">
-                            <div class="p-4 border-b border-enterprise-100 flex items-center gap-4">
+                            <div class="p-4 border-b border-enterprise-100 flex items-center gap-4 flex-wrap">
                                 <label class="text-sm font-medium text-enterprise-700">Filter by Date:</label>
                                 <input type="date" id="allowanceDate" class="w-48">
+                                <label class="text-sm font-medium text-enterprise-700 ml-4">User Type:</label>
+                                <select id="allowanceUserType" class="w-36">
+                                    <option value="">All Users</option>
+                                    <option value="student">Students</option>
+                                    <option value="teacher">Teachers</option>
+                                </select>
                                 <button onclick="loadAllowances()" class="btn-primary">Load Allowances</button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table>
-                                    <thead><tr><th>Student</th><th>Date</th><th>Base Amount</th><th>Supplement</th><th>Total</th></tr></thead>
+                                    <thead><tr><th>Name</th><th>Type</th><th>Date</th><th>Base Amount</th><th>Supplement</th><th>Total</th></tr></thead>
                                     <tbody id="allowancesTable"></tbody>
                                 </table>
                             </div>
@@ -888,9 +901,9 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             document.getElementById('pageTitle').textContent = titles[page] || page;
             document.getElementById('pageBreadcrumb').textContent = pageBreadcrumbs[page] || '';
             
-            if (page === 'users') { loadStudents(); loadTeachers(); loadProgramSelects(); }
-            if (page === 'bulk') { loadProgramSelects(); }
-            if (page === 'allowances') { loadStudentSelect(); loadProgramSelects(); updateSupplementTargets(); }
+            if (page === 'users') { loadStudents(); loadTeachers(); loadPrograms().then(() => loadProgramSelects()); }
+            if (page === 'bulk') { loadPrograms().then(() => loadProgramSelects()); }
+            if (page === 'allowances') { loadStudentSelect(); loadPrograms().then(() => loadProgramSelects()); updateSupplementTargets(); }
             if (page === 'programs') { loadPrograms(); }
             if (page === 'telemetry') { loadTelemetry(); }
         }
@@ -1121,6 +1134,9 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = '<option value="">Select Program</option>' + options;
             });
+            // Multi-select for teacher programs (no "Select" placeholder needed)
+            const multiSelect = document.getElementById('createUserProgramsMulti');
+            if (multiSelect) multiSelect.innerHTML = options;
         }
 
         async function loadStudentSelect() {
@@ -1131,8 +1147,14 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
 
         async function loadAllowances() {
             const date = document.getElementById('allowanceDate').value;
+            const userType = document.getElementById('allowanceUserType').value;
             try {
-                const url = date ? `${API_BASE}/allowances?filter_date=${date}` : `${API_BASE}/allowances`;
+                let url = `${API_BASE}/allowances`;
+                const params = [];
+                if (date) params.push(`filter_date=${date}`);
+                if (userType) params.push(`user_type=${userType}`);
+                if (params.length > 0) url += '?' + params.join('&');
+                
                 const res = await fetch(url);
                 const data = await res.json();
                 
@@ -1140,12 +1162,13 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 tbody.innerHTML = data.map(a => `
                     <tr>
                         <td class="font-medium">${a.full_name}</td>
+                        <td><span class="badge ${a.user_type === 'teacher' ? 'badge-info' : 'badge-primary'}">${a.user_type === 'teacher' ? 'Teacher' : 'Student'}</span></td>
                         <td>${a.date}</td>
                         <td>${a.base_amount} SAR</td>
                         <td>${a.bonus_amount} SAR</td>
                         <td class="font-semibold text-enterprise-900">${a.total_amount} SAR</td>
                     </tr>
-                `).join('') || '<tr><td colspan="5" class="text-center text-enterprise-500 py-8">No allowances found for the selected criteria</td></tr>';
+                `).join('') || '<tr><td colspan="6" class="text-center text-enterprise-500 py-8">No allowances found for the selected criteria</td></tr>';
             } catch (e) {
                 showToast('Failed to load allowances', 'error');
             }
@@ -1235,7 +1258,9 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
 
         function toggleUserFields(role) {
             document.getElementById('studentFields').classList.toggle('hidden', role !== 'student');
-            document.getElementById('programSelectContainer').classList.toggle('hidden', role === 'store');
+            document.getElementById('programSelectContainer').classList.toggle('hidden', role !== 'student');
+            document.getElementById('teacherProgramsContainer').classList.toggle('hidden', role !== 'teacher');
+            document.getElementById('programRequiredStar').style.display = role === 'student' ? 'inline' : 'none';
         }
 
         async function updateSupplementTargets() {
@@ -1281,6 +1306,14 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             const form = e.target;
             const data = Object.fromEntries(new FormData(form));
             
+            // For teachers, get selected program IDs from multi-select
+            if (data.role === 'teacher') {
+                const multiSelect = document.getElementById('createUserProgramsMulti');
+                const selectedPrograms = Array.from(multiSelect.selectedOptions).map(opt => opt.value);
+                data.program_ids = selectedPrograms;
+                delete data.program_id; // Teachers use program_ids instead
+            }
+            
             try {
                 const res = await fetch(`${API_BASE}/users`, {
                     method: 'POST',
@@ -1291,6 +1324,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 if (result.success) {
                     showToast('User created successfully!', 'success');
                     form.reset();
+                    toggleUserFields('student'); // Reset visibility to default
                     loadStudents();
                     loadTeachers();
                 } else {

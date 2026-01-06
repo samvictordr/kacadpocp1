@@ -312,19 +312,41 @@ async def get_all_students():
 
 @router.get("/api/teachers")
 async def get_all_teachers():
-    """Get all teachers."""
+    """Get all teachers with their program assignments."""
     try:
         async with async_session_factory() as session:
+            # Get basic teacher info
             result = await session.execute(text("""
-                SELECT t.teacher_id, t.user_id, t.full_name,
-                       t.program_id, t.is_active, p.name as program_name
-                FROM teachers t
-                LEFT JOIN programs p ON t.program_id = p.program_id
-                ORDER BY t.full_name
+                SELECT t.teacher_id, t.user_id, t.full_name, t.is_active
+                FROM teachers t ORDER BY t.full_name
             """))
             rows = result.fetchall()
-            columns = ["teacher_id", "user_id", "full_name", "program_id", "is_active", "program_name"]
-            return [dict(zip(columns, row)) for row in rows]
+            teachers = []
+            
+            for row in rows:
+                teacher_id = str(row[0])
+                # Get all programs for this teacher from junction table
+                prog_result = await session.execute(text("""
+                    SELECT p.program_id, p.name 
+                    FROM teacher_programs tp
+                    JOIN programs p ON tp.program_id = p.program_id
+                    WHERE tp.teacher_id = :teacher_id
+                """), {"teacher_id": teacher_id})
+                prog_rows = prog_result.fetchall()
+                
+                programs = [{"program_id": str(pr[0]), "name": pr[1]} for pr in prog_rows]
+                program_names = ", ".join([p["name"] for p in programs]) if programs else "No programs"
+                
+                teachers.append({
+                    "teacher_id": teacher_id,
+                    "user_id": str(row[1]),
+                    "full_name": row[2],
+                    "is_active": row[3],
+                    "programs": programs,
+                    "program_name": program_names  # For backward compatibility with UI
+                })
+            
+            return teachers
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -338,10 +360,11 @@ async def get_all_programs():
                 SELECT p.program_id, p.name, p.cost_center, 
                        p.default_daily_allowance, p.is_active,
                        COUNT(DISTINCT s.student_id) as student_count,
-                       COUNT(DISTINCT t.teacher_id) as teacher_count
+                       COUNT(DISTINCT tp.teacher_id) as teacher_count
                 FROM programs p
                 LEFT JOIN students s ON p.program_id = s.program_id AND s.is_active = true
-                LEFT JOIN teachers t ON p.program_id = t.program_id AND t.is_active = true
+                LEFT JOIN teacher_programs tp ON p.program_id = tp.program_id
+                LEFT JOIN teachers t ON tp.teacher_id = t.teacher_id AND t.is_active = true
                 GROUP BY p.program_id ORDER BY p.name
             """))
             rows = result.fetchall()
@@ -411,15 +434,31 @@ async def create_user(data: dict):
                     "program_id": data.get("program_id")
                 })
             elif role == "teacher":
+                teacher_id = str(uuid.uuid4())
+                # Get first program_id for backward compatibility (legacy column)
+                program_ids = data.get("program_ids", [])
+                primary_program_id = program_ids[0] if program_ids else data.get("program_id")
+                
                 await session.execute(text("""
                     INSERT INTO teachers (teacher_id, user_id, full_name, program_id, is_active, created_at)
                     VALUES (:teacher_id, :user_id, :full_name, :program_id, true, NOW())
                 """), {
-                    "teacher_id": str(uuid.uuid4()),
+                    "teacher_id": teacher_id,
                     "user_id": user_id,
                     "full_name": data["full_name"],
-                    "program_id": data.get("program_id")
+                    "program_id": primary_program_id
                 })
+                
+                # Insert into teacher_programs junction table for all selected programs
+                for program_id in program_ids:
+                    await session.execute(text("""
+                        INSERT INTO teacher_programs (teacher_id, program_id)
+                        VALUES (:teacher_id, :program_id)
+                        ON CONFLICT (teacher_id, program_id) DO NOTHING
+                    """), {
+                        "teacher_id": teacher_id,
+                        "program_id": program_id
+                    })
             # Store users only get MongoDB entry, no PostgreSQL record needed
             await session.commit()
         
@@ -562,29 +601,58 @@ async def delete_program(program_id: str):
 # ==================== ALLOWANCES ====================
 
 @router.get("/api/allowances")
-async def get_allowances(filter_date: Optional[str] = None):
-    """Get allowances."""
+async def get_allowances(filter_date: Optional[str] = None, user_type: Optional[str] = None):
+    """Get allowances for students and/or teachers."""
     try:
+        results = []
         async with async_session_factory() as session:
-            if filter_date:
-                result = await session.execute(text("""
-                    SELECT da.allowance_id, da.student_id, da.date, da.base_amount, 
-                           da.bonus_amount, da.total_amount, s.full_name 
-                    FROM daily_allowances da
-                    JOIN students s ON da.student_id = s.student_id
-                    WHERE da.date = :filter_date ORDER BY s.full_name
-                """), {"filter_date": filter_date})
-            else:
-                result = await session.execute(text("""
-                    SELECT da.allowance_id, da.student_id, da.date, da.base_amount, 
-                           da.bonus_amount, da.total_amount, s.full_name 
-                    FROM daily_allowances da
-                    JOIN students s ON da.student_id = s.student_id
-                    ORDER BY da.date DESC, s.full_name LIMIT 100
-                """))
-            rows = result.fetchall()
-            columns = ["allowance_id", "student_id", "date", "base_amount", "bonus_amount", "total_amount", "full_name"]
-            return [dict(zip(columns, row)) for row in rows]
+            # Get student allowances (unless user_type is 'teacher')
+            if user_type != 'teacher':
+                if filter_date:
+                    result = await session.execute(text("""
+                        SELECT da.allowance_id, da.student_id as user_id, da.date, da.base_amount, 
+                               da.bonus_amount, da.total_amount, s.full_name, 'student' as user_type
+                        FROM daily_allowances da
+                        JOIN students s ON da.student_id = s.student_id
+                        WHERE da.date = :filter_date ORDER BY s.full_name
+                    """), {"filter_date": filter_date})
+                else:
+                    result = await session.execute(text("""
+                        SELECT da.allowance_id, da.student_id as user_id, da.date, da.base_amount, 
+                               da.bonus_amount, da.total_amount, s.full_name, 'student' as user_type
+                        FROM daily_allowances da
+                        JOIN students s ON da.student_id = s.student_id
+                        ORDER BY da.date DESC, s.full_name LIMIT 100
+                    """))
+                rows = result.fetchall()
+                columns = ["allowance_id", "user_id", "date", "base_amount", "bonus_amount", "total_amount", "full_name", "user_type"]
+                results.extend([dict(zip(columns, row)) for row in rows])
+            
+            # Get teacher allowances (unless user_type is 'student')
+            if user_type != 'student':
+                if filter_date:
+                    result = await session.execute(text("""
+                        SELECT tda.allowance_id, tda.teacher_id as user_id, tda.date, tda.base_amount, 
+                               tda.bonus_amount, tda.total_amount, t.full_name, 'teacher' as user_type
+                        FROM teacher_daily_allowances tda
+                        JOIN teachers t ON tda.teacher_id = t.teacher_id
+                        WHERE tda.date = :filter_date ORDER BY t.full_name
+                    """), {"filter_date": filter_date})
+                else:
+                    result = await session.execute(text("""
+                        SELECT tda.allowance_id, tda.teacher_id as user_id, tda.date, tda.base_amount, 
+                               tda.bonus_amount, tda.total_amount, t.full_name, 'teacher' as user_type
+                        FROM teacher_daily_allowances tda
+                        JOIN teachers t ON tda.teacher_id = t.teacher_id
+                        ORDER BY tda.date DESC, t.full_name LIMIT 100
+                    """))
+                rows = result.fetchall()
+                columns = ["allowance_id", "user_id", "date", "base_amount", "bonus_amount", "total_amount", "full_name", "user_type"]
+                results.extend([dict(zip(columns, row)) for row in rows])
+            
+            # Sort combined results by date desc, then name
+            results.sort(key=lambda x: (str(x['date']), x['full_name']), reverse=True)
+            return results[:100]  # Limit to 100 total
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
