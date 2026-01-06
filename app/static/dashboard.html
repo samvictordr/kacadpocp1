@@ -6,98 +6,602 @@
     <title>Academy Admin Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        enterprise: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617'
+                        },
+                        accent: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a'
+                        },
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444'
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        * { font-family: 'Inter', sans-serif; }
-        .sidebar-item { transition: all 0.2s; }
-        .sidebar-item:hover { background: rgba(255,255,255,0.1); }
-        .sidebar-item.active { background: rgba(255,255,255,0.2); border-left: 3px solid #f59e0b; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .btn-primary { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-        .btn-primary:hover { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
-        .modal.active { display: flex; align-items: center; justify-content: center; }
-        .toast { animation: slideIn 0.3s ease; }
-        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-        .health-dot { width: 12px; height: 12px; border-radius: 50%; }
-        .health-healthy { background: #22c55e; }
-        .health-unhealthy { background: #ef4444; }
-        .health-unknown { background: #9ca3af; }
-        .tab-btn.active { border-bottom: 2px solid #f59e0b; color: #f59e0b; }
-        .loading { display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #f59e0b; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        input, select, textarea { border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 12px; }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1); }
-        table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 12px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #374151; }
-        td { padding: 12px; border-bottom: 1px solid #e5e7eb; }
-        tr:hover { background: #f9fafb; }
+        * { 
+            font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif; 
+        }
+        
+        code, pre, .mono {
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Enterprise Sidebar */
+        .sidebar {
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            border-right: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .sidebar-item {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-left: 3px solid transparent;
+            margin: 2px 12px;
+            border-radius: 6px;
+        }
+        
+        .sidebar-item:hover {
+            background: rgba(255,255,255,0.05);
+            border-left-color: rgba(59, 130, 246, 0.5);
+        }
+        
+        .sidebar-item.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-left-color: #3b82f6;
+        }
+        
+        .sidebar-item.active i {
+            color: #3b82f6;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+            transition: box-shadow 0.2s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+        }
+
+        /* Stat Cards */
+        .stat-card {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%);
+            border-radius: 50%;
+            transform: translate(30%, -30%);
+        }
+        
+        .stat-card .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: #334155;
+            border: 1px solid #e2e8f0;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-secondary:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+        }
+
+        /* Form Elements */
+        input, select, textarea {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            background: white;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        input::placeholder {
+            color: #94a3b8;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            text-align: left;
+            padding: 14px 16px;
+            background: #f8fafc;
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #475569;
+        }
+        
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+            color: #334155;
+        }
+        
+        tr:hover td {
+            background: #f8fafc;
+        }
+
+        /* Tabs */
+        .tab-btn {
+            position: relative;
+            padding: 12px 16px;
+            font-weight: 500;
+            color: #64748b;
+            transition: all 0.2s ease;
+        }
+        
+        .tab-btn::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: transparent;
+            transition: background 0.2s ease;
+        }
+        
+        .tab-btn:hover {
+            color: #334155;
+        }
+        
+        .tab-btn.active {
+            color: #3b82f6;
+        }
+        
+        .tab-btn.active::after {
+            background: #3b82f6;
+        }
+
+        /* Health Indicators */
+        .health-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            position: relative;
+        }
+        
+        .health-healthy {
+            background: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+        }
+        
+        .health-unhealthy {
+            background: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+        
+        .health-unknown {
+            background: #94a3b8;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Toast */
+        .toast {
+            animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(8px);
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e2e8f0;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Status Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .badge-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: #059669;
+        }
+        
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+        }
+
+        /* Service Health Cards */
+        .service-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            background: white;
+            transition: all 0.2s ease;
+        }
+        
+        .service-card:hover {
+            border-color: #cbd5e1;
+        }
+        
+        .service-card.healthy {
+            border-left: 3px solid #10b981;
+        }
+        
+        .service-card.unhealthy {
+            border-left: 3px solid #ef4444;
+        }
+
+        /* Charts Container */
+        .chart-container {
+            position: relative;
+            padding: 20px;
+        }
+
+        /* Page Transitions */
+        .page-content {
+            animation: fadeIn 0.2s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Login Screen */
+        .login-container {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .login-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 80%;
+            height: 150%;
+            background: radial-gradient(ellipse, rgba(59, 130, 246, 0.15) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        
+        .login-container::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -20%;
+            width: 60%;
+            height: 100%;
+            background: radial-gradient(ellipse, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        .login-card {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Header */
+        .main-header {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        /* Action Links */
+        .action-link {
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+        }
+        
+        .action-link-primary {
+            color: #3b82f6;
+        }
+        
+        .action-link-primary:hover {
+            color: #2563eb;
+            text-decoration: underline;
+        }
+        
+        .action-link-danger {
+            color: #ef4444;
+        }
+        
+        .action-link-danger:hover {
+            color: #dc2626;
+            text-decoration: underline;
+        }
+
+        /* Info Boxes */
+        .info-box {
+            border-radius: 8px;
+            padding: 14px 16px;
+            font-size: 13px;
+        }
+        
+        .info-box-warning {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            color: #92400e;
+        }
+        
+        .info-box-success {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+        }
+        
+        .info-box-info {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+        }
+
+        /* Telemetry Stats */
+        .telemetry-stat {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .telemetry-stat .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .telemetry-stat .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        /* Logo */
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+        }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-enterprise-50">
     <!-- Login Screen -->
-    <div id="loginScreen" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600">
-        <div class="card p-8 w-full max-w-md">
-            <div class="text-center mb-6">
-                <div class="text-4xl mb-2 text-amber-600"><i class="fas fa-graduation-cap"></i></div>
-                <h1 class="text-2xl font-bold text-gray-800">Academy Admin</h1>
-                <p class="text-gray-500">Sign in to continue</p>
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center login-container">
+        <div class="login-card p-10 w-full max-w-md relative z-10">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-accent-500 to-accent-700 rounded-2xl mb-4 shadow-lg shadow-accent-500/25">
+                    <i class="fas fa-graduation-cap text-2xl text-white"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-enterprise-900 tracking-tight">Academy Admin</h1>
+                <p class="text-enterprise-500 mt-1 text-sm">Enterprise Management Platform</p>
             </div>
-            <form id="loginForm" class="space-y-4">
+            <form id="loginForm" class="space-y-5">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Email Address</label>
                     <input type="email" id="loginEmail" class="w-full" placeholder="admin@academy.edu" required>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                    <input type="password" id="loginPassword" class="w-full" placeholder="••••••••" required>
+                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Password</label>
+                    <input type="password" id="loginPassword" class="w-full" placeholder="Enter your password" required>
                 </div>
-                <div id="loginError" class="text-red-500 text-sm hidden"></div>
-                <button type="submit" class="w-full btn-primary text-white py-3 rounded-lg font-medium">
+                <div id="loginError" class="text-danger text-sm hidden bg-red-50 border border-red-200 rounded-lg p-3"></div>
+                <button type="submit" class="w-full btn-primary py-3 text-base">
                     Sign In
                 </button>
             </form>
+            <p class="text-center text-enterprise-400 text-xs mt-6">
+                Secure enterprise authentication
+            </p>
         </div>
     </div>
 
     <!-- Main Dashboard -->
     <div id="mainDashboard" class="hidden">
         <!-- Sidebar -->
-        <div class="fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white z-50">
-            <div class="p-6 border-b border-gray-700">
-                <div class="flex items-center gap-3">
-                    <div class="text-3xl text-amber-400"><i class="fas fa-graduation-cap"></i></div>
+        <div class="fixed left-0 top-0 h-full w-64 sidebar text-white z-50">
+            <div class="p-6 border-b border-white/10">
+                <div class="logo-container">
+                    <div class="logo-icon">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
                     <div>
-                        <h1 class="font-bold text-lg">Academy Admin</h1>
-                        <p class="text-xs text-gray-400" id="adminName">Administrator</p>
+                        <h1 class="font-semibold text-base text-white">Academy Admin</h1>
+                        <p class="text-xs text-enterprise-400" id="adminName">Administrator</p>
                     </div>
                 </div>
             </div>
-            <nav class="p-4 space-y-1">
-                <div class="sidebar-item active rounded-lg px-4 py-3 cursor-pointer flex items-center gap-3" data-page="dashboard">
-                    <i class="fas fa-home w-5 text-center"></i> Dashboard
+            <nav class="py-4">
+                <div class="px-4 mb-2">
+                    <span class="text-[10px] uppercase tracking-wider text-enterprise-500 font-medium">Main Menu</span>
                 </div>
-                <div class="sidebar-item rounded-lg px-4 py-3 cursor-pointer flex items-center gap-3" data-page="users">
-                    <i class="fas fa-users w-5 text-center"></i> User Management
+                <div class="sidebar-item px-4 py-3 cursor-pointer flex items-center gap-3 active" data-page="dashboard">
+                    <i class="fas fa-th-large w-5 text-center text-enterprise-400"></i>
+                    <span class="text-sm font-medium">Dashboard</span>
                 </div>
-                <div class="sidebar-item rounded-lg px-4 py-3 cursor-pointer flex items-center gap-3" data-page="bulk">
-                    <i class="fas fa-file-upload w-5 text-center"></i> Bulk Upload
+                <div class="sidebar-item px-4 py-3 cursor-pointer flex items-center gap-3" data-page="users">
+                    <i class="fas fa-users w-5 text-center text-enterprise-400"></i>
+                    <span class="text-sm font-medium">User Management</span>
                 </div>
-                <div class="sidebar-item rounded-lg px-4 py-3 cursor-pointer flex items-center gap-3" data-page="allowances">
-                    <i class="fas fa-wallet w-5 text-center"></i> Allowances
+                <div class="sidebar-item px-4 py-3 cursor-pointer flex items-center gap-3" data-page="bulk">
+                    <i class="fas fa-cloud-upload-alt w-5 text-center text-enterprise-400"></i>
+                    <span class="text-sm font-medium">Bulk Upload</span>
                 </div>
-                <div class="sidebar-item rounded-lg px-4 py-3 cursor-pointer flex items-center gap-3" data-page="programs">
-                    <i class="fas fa-building w-5 text-center"></i> Programs
+                <div class="sidebar-item px-4 py-3 cursor-pointer flex items-center gap-3" data-page="allowances">
+                    <i class="fas fa-wallet w-5 text-center text-enterprise-400"></i>
+                    <span class="text-sm font-medium">Allowances</span>
                 </div>
-                <div class="sidebar-item rounded-lg px-4 py-3 cursor-pointer flex items-center gap-3" data-page="telemetry">
-                    <i class="fas fa-chart-line w-5 text-center"></i> Telemetry
+                <div class="sidebar-item px-4 py-3 cursor-pointer flex items-center gap-3" data-page="programs">
+                    <i class="fas fa-sitemap w-5 text-center text-enterprise-400"></i>
+                    <span class="text-sm font-medium">Programs</span>
+                </div>
+                <div class="sidebar-item px-4 py-3 cursor-pointer flex items-center gap-3" data-page="telemetry">
+                    <i class="fas fa-chart-bar w-5 text-center text-enterprise-400"></i>
+                    <span class="text-sm font-medium">Telemetry</span>
                 </div>
             </nav>
-            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
-                <button id="logoutBtn" class="w-full bg-gray-700 hover:bg-gray-600 py-2 rounded-lg flex items-center justify-center gap-2">
-                    <i class="fas fa-sign-out-alt"></i> Logout
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
+                <button id="logoutBtn" class="w-full bg-white/5 hover:bg-white/10 py-2.5 rounded-lg flex items-center justify-center gap-2 text-sm font-medium text-enterprise-300 transition-colors">
+                    <i class="fas fa-sign-out-alt"></i> Sign Out
                 </button>
             </div>
         </div>
@@ -105,14 +609,19 @@
         <!-- Main Content -->
         <div class="ml-64 min-h-screen">
             <!-- Header -->
-            <header class="bg-white shadow-sm px-8 py-4 flex items-center justify-between">
-                <h2 id="pageTitle" class="text-xl font-semibold text-gray-800">Dashboard</h2>
-                <div class="flex items-center gap-4">
-                    <div id="healthIndicator" class="flex items-center gap-2 text-sm">
+            <header class="main-header px-8 py-4 flex items-center justify-between sticky top-0 z-40">
+                <div>
+                    <h2 id="pageTitle" class="text-xl font-semibold text-enterprise-900">Dashboard</h2>
+                    <p class="text-sm text-enterprise-500" id="pageBreadcrumb">Overview & Analytics</p>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div id="healthIndicator" class="flex items-center gap-2 text-sm bg-enterprise-50 px-4 py-2 rounded-lg">
                         <div class="health-dot health-unknown"></div>
-                        <span>Checking...</span>
+                        <span class="text-enterprise-600 font-medium">Checking status...</span>
                     </div>
-                    <button onclick="location.reload()" class="text-gray-500 hover:text-gray-700">🔄</button>
+                    <button onclick="location.reload()" class="btn-secondary px-4 py-2 flex items-center gap-2">
+                        <i class="fas fa-sync-alt text-xs"></i> Refresh
+                    </button>
                 </div>
             </header>
 
@@ -123,81 +632,153 @@
                     <!-- Stats Grid -->
                     <div class="grid grid-cols-4 gap-6 mb-8">
                         <div class="stat-card text-white p-6 rounded-xl">
-                            <div class="text-3xl font-bold" id="statStudents">-</div>
-                            <div class="text-sm opacity-80">Total Students</div>
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <div class="text-sm text-enterprise-300 font-medium mb-1">Total Students</div>
+                                    <div class="text-3xl font-bold" id="statStudents">—</div>
+                                </div>
+                                <div class="stat-icon bg-accent-500/20">
+                                    <i class="fas fa-user-graduate text-accent-400"></i>
+                                </div>
+                            </div>
                         </div>
                         <div class="stat-card text-white p-6 rounded-xl">
-                            <div class="text-3xl font-bold" id="statTeachers">-</div>
-                            <div class="text-sm opacity-80">Total Teachers</div>
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <div class="text-sm text-enterprise-300 font-medium mb-1">Total Teachers</div>
+                                    <div class="text-3xl font-bold" id="statTeachers">—</div>
+                                </div>
+                                <div class="stat-icon bg-emerald-500/20">
+                                    <i class="fas fa-chalkboard-teacher text-emerald-400"></i>
+                                </div>
+                            </div>
                         </div>
                         <div class="stat-card text-white p-6 rounded-xl">
-                            <div class="text-3xl font-bold" id="statTransactions">-</div>
-                            <div class="text-sm opacity-80">Transactions Today</div>
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <div class="text-sm text-enterprise-300 font-medium mb-1">Transactions Today</div>
+                                    <div class="text-3xl font-bold" id="statTransactions">—</div>
+                                </div>
+                                <div class="stat-icon bg-amber-500/20">
+                                    <i class="fas fa-receipt text-amber-400"></i>
+                                </div>
+                            </div>
                         </div>
                         <div class="stat-card text-white p-6 rounded-xl">
-                            <div class="text-3xl font-bold" id="statAttendance">-</div>
-                            <div class="text-sm opacity-80">Attendance Today</div>
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <div class="text-sm text-enterprise-300 font-medium mb-1">Attendance Today</div>
+                                    <div class="text-3xl font-bold" id="statAttendance">—</div>
+                                </div>
+                                <div class="stat-icon bg-purple-500/20">
+                                    <i class="fas fa-clipboard-check text-purple-400"></i>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Service Health -->
                     <div class="card p-6 mb-8">
-                        <h3 class="text-lg font-semibold mb-4">Service Health</h3>
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 class="text-lg font-semibold text-enterprise-900">Service Health</h3>
+                                <p class="text-sm text-enterprise-500">Real-time infrastructure status</p>
+                            </div>
+                            <span class="badge badge-success">
+                                <i class="fas fa-circle text-[6px] mr-2"></i> Monitoring Active
+                            </span>
+                        </div>
                         <div class="grid grid-cols-3 gap-4" id="serviceHealth">
-                            <div class="border rounded-lg p-4">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <div class="health-dot health-unknown" id="pgHealth"></div>
-                                    <span class="font-medium">PostgreSQL</span>
+                            <div class="service-card" id="pgServiceCard">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                                        <i class="fas fa-database text-blue-600"></i>
+                                    </div>
+                                    <div>
+                                        <span class="font-semibold text-enterprise-900">PostgreSQL</span>
+                                        <div class="flex items-center gap-2 mt-0.5">
+                                            <div class="health-dot health-unknown" id="pgHealth"></div>
+                                            <span class="text-xs text-enterprise-500" id="pgStatus">Checking...</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="text-sm text-gray-500" id="pgStatus">Checking...</div>
                             </div>
-                            <div class="border rounded-lg p-4">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <div class="health-dot health-unknown" id="mongoHealth"></div>
-                                    <span class="font-medium">MongoDB</span>
+                            <div class="service-card" id="mongoServiceCard">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+                                        <i class="fas fa-leaf text-green-600"></i>
+                                    </div>
+                                    <div>
+                                        <span class="font-semibold text-enterprise-900">MongoDB</span>
+                                        <div class="flex items-center gap-2 mt-0.5">
+                                            <div class="health-dot health-unknown" id="mongoHealth"></div>
+                                            <span class="text-xs text-enterprise-500" id="mongoStatus">Checking...</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="text-sm text-gray-500" id="mongoStatus">Checking...</div>
                             </div>
-                            <div class="border rounded-lg p-4">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <div class="health-dot health-unknown" id="redisHealth"></div>
-                                    <span class="font-medium">Redis</span>
+                            <div class="service-card" id="redisServiceCard">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
+                                        <i class="fas fa-bolt text-red-600"></i>
+                                    </div>
+                                    <div>
+                                        <span class="font-semibold text-enterprise-900">Redis</span>
+                                        <div class="flex items-center gap-2 mt-0.5">
+                                            <div class="health-dot health-unknown" id="redisHealth"></div>
+                                            <span class="text-xs text-enterprise-500" id="redisStatus">Checking...</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="text-sm text-gray-500" id="redisStatus">Checking...</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Charts -->
                     <div class="grid grid-cols-2 gap-6">
-                        <div class="card p-6">
-                            <h3 class="text-lg font-semibold mb-4">Transaction Trend (7 Days)</h3>
-                            <canvas id="transactionChart" height="200"></canvas>
+                        <div class="card">
+                            <div class="px-6 py-4 border-b border-enterprise-100">
+                                <h3 class="font-semibold text-enterprise-900">Transaction Trend</h3>
+                                <p class="text-sm text-enterprise-500">Last 7 days</p>
+                            </div>
+                            <div class="p-6">
+                                <canvas id="transactionChart" height="200"></canvas>
+                            </div>
                         </div>
-                        <div class="card p-6">
-                            <h3 class="text-lg font-semibold mb-4">Attendance Trend (7 Days)</h3>
-                            <canvas id="attendanceChart" height="200"></canvas>
+                        <div class="card">
+                            <div class="px-6 py-4 border-b border-enterprise-100">
+                                <h3 class="font-semibold text-enterprise-900">Attendance Trend</h3>
+                                <p class="text-sm text-enterprise-500">Last 7 days</p>
+                            </div>
+                            <div class="p-6">
+                                <canvas id="attendanceChart" height="200"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Users Page -->
                 <div id="page-users" class="page-content hidden">
-                    <div class="flex gap-4 mb-6">
-                        <button class="tab-btn active px-4 py-2 font-medium" data-tab="students">Students</button>
-                        <button class="tab-btn px-4 py-2 font-medium text-gray-500" data-tab="teachers">Teachers</button>
-                        <button class="tab-btn px-4 py-2 font-medium text-gray-500" data-tab="create">Create User</button>
+                    <div class="flex gap-1 mb-6 border-b border-enterprise-200">
+                        <button class="tab-btn active" data-tab="students">Students</button>
+                        <button class="tab-btn" data-tab="teachers">Teachers</button>
+                        <button class="tab-btn" data-tab="create">Create User</button>
                     </div>
                     
                     <div id="tab-students" class="tab-content">
                         <div class="card">
-                            <div class="p-4 border-b flex justify-between items-center">
-                                <input type="text" id="searchStudents" placeholder="Search students..." class="w-64">
-                                <button onclick="loadStudents()" class="btn-primary text-white px-4 py-2 rounded-lg">Refresh</button>
+                            <div class="p-4 border-b border-enterprise-100 flex justify-between items-center">
+                                <div class="relative">
+                                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-enterprise-400 text-sm"></i>
+                                    <input type="text" id="searchStudents" placeholder="Search students..." class="pl-10 w-72">
+                                </div>
+                                <button onclick="loadStudents()" class="btn-secondary flex items-center gap-2">
+                                    <i class="fas fa-sync-alt text-xs"></i> Refresh
+                                </button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table>
-                                    <thead><tr><th>Name</th><th>Phone number</th><th>Program</th><th>Status</th><th>Actions</th></tr></thead>
+                                    <thead><tr><th>Name</th><th>Phone Number</th><th>Program</th><th>Status</th><th>Actions</th></tr></thead>
                                     <tbody id="studentsTable"></tbody>
                                 </table>
                             </div>
@@ -206,9 +787,14 @@
                     
                     <div id="tab-teachers" class="tab-content hidden">
                         <div class="card">
-                            <div class="p-4 border-b flex justify-between items-center">
-                                <input type="text" id="searchTeachers" placeholder="Search teachers..." class="w-64">
-                                <button onclick="loadTeachers()" class="btn-primary text-white px-4 py-2 rounded-lg">Refresh</button>
+                            <div class="p-4 border-b border-enterprise-100 flex justify-between items-center">
+                                <div class="relative">
+                                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-enterprise-400 text-sm"></i>
+                                    <input type="text" id="searchTeachers" placeholder="Search teachers..." class="pl-10 w-72">
+                                </div>
+                                <button onclick="loadTeachers()" class="btn-secondary flex items-center gap-2">
+                                    <i class="fas fa-sync-alt text-xs"></i> Refresh
+                                </button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table>
@@ -220,22 +806,25 @@
                     </div>
                     
                     <div id="tab-create" class="tab-content hidden">
-                        <div class="card p-6 max-w-2xl">
-                            <h3 class="text-lg font-semibold mb-4">Create New User</h3>
-                            <form id="createUserForm" class="space-y-4">
-                                <div class="grid grid-cols-2 gap-4">
+                        <div class="card p-8 max-w-2xl">
+                            <div class="mb-6">
+                                <h3 class="text-lg font-semibold text-enterprise-900">Create New User</h3>
+                                <p class="text-sm text-enterprise-500">Add a new user to the system</p>
+                            </div>
+                            <form id="createUserForm" class="space-y-5">
+                                <div class="grid grid-cols-2 gap-5">
                                     <div>
-                                        <label class="block text-sm font-medium mb-1">Full Name *</label>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Full Name <span class="text-danger">*</span></label>
                                         <input type="text" name="full_name" required class="w-full">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium mb-1">Email *</label>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Email <span class="text-danger">*</span></label>
                                         <input type="email" name="email" required class="w-full">
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-2 gap-4">
+                                <div class="grid grid-cols-2 gap-5">
                                     <div>
-                                        <label class="block text-sm font-medium mb-1">Role *</label>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Role <span class="text-danger">*</span></label>
                                         <select name="role" required class="w-full" onchange="toggleUserFields(this.value)">
                                             <option value="student">Student</option>
                                             <option value="teacher">Teacher</option>
@@ -243,20 +832,22 @@
                                         </select>
                                     </div>
                                     <div id="programSelectContainer">
-                                        <label class="block text-sm font-medium mb-1">Program</label>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Program</label>
                                         <select name="program_id" class="w-full" id="createUserProgram"></select>
                                     </div>
                                 </div>
                                 <div id="studentFields">
-                                    <label class="block text-sm font-medium mb-1">Phone Number (Saudi: +966XXXXXXXXX)</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Phone Number</label>
                                     <input type="text" name="phone_number" class="w-full" placeholder="+966501234567">
-                                    <p class="text-xs text-gray-500 mt-1">Format: +966 followed by 9 digits, or 05XXXXXXXX</p>
+                                    <p class="text-xs text-enterprise-500 mt-2">Saudi format: +966 followed by 9 digits, or 05XXXXXXXX</p>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Password</label>
-                                    <input type="password" name="password" class="w-full" placeholder="Leave blank for temp123">
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Password</label>
+                                    <input type="password" name="password" class="w-full" placeholder="Leave blank for default (temp123)">
                                 </div>
-                                <button type="submit" class="btn-primary text-white px-6 py-2 rounded-lg">Create User</button>
+                                <div class="pt-2">
+                                    <button type="submit" class="btn-primary">Create User</button>
+                                </div>
                             </form>
                         </div>
                     </div>
@@ -266,56 +857,82 @@
                 <div id="page-bulk" class="page-content hidden">
                     <div class="grid grid-cols-2 gap-6">
                         <div class="card p-6">
-                            <h3 class="text-lg font-semibold mb-4"><i class="fas fa-file-upload text-amber-500 mr-2"></i>Bulk Upload Students</h3>
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-accent-50 flex items-center justify-center">
+                                    <i class="fas fa-user-graduate text-accent-600"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-enterprise-900">Bulk Upload Students</h3>
+                                    <p class="text-sm text-enterprise-500">Import multiple students via CSV</p>
+                                </div>
+                            </div>
                             <form id="bulkStudentForm" class="space-y-4">
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Program *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Program <span class="text-danger">*</span></label>
                                     <select name="program_id" required class="w-full" id="bulkStudentProgram"></select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">CSV File *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">CSV File <span class="text-danger">*</span></label>
                                     <input type="file" name="file" accept=".csv" required class="w-full">
                                 </div>
-                                <div class="text-sm text-gray-500">
-                                    Required columns: <code>full_name, email, phone_number</code>
+                                <div class="info-box info-box-info">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    Required columns: <code class="mono text-xs bg-white/50 px-1.5 py-0.5 rounded">full_name, email, phone_number</code>
                                 </div>
-                                <button type="submit" class="btn-primary text-white px-6 py-2 rounded-lg">Upload Students</button>
+                                <button type="submit" class="btn-primary">Upload Students</button>
                             </form>
                             <div id="bulkStudentResult" class="mt-4"></div>
                         </div>
                         
                         <div class="card p-6">
-                            <h3 class="text-lg font-semibold mb-4"><i class="fas fa-file-upload text-amber-500 mr-2"></i>Bulk Upload Teachers</h3>
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
+                                    <i class="fas fa-chalkboard-teacher text-emerald-600"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-enterprise-900">Bulk Upload Teachers</h3>
+                                    <p class="text-sm text-enterprise-500">Import multiple teachers via CSV</p>
+                                </div>
+                            </div>
                             <form id="bulkTeacherForm" class="space-y-4">
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Program *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Program <span class="text-danger">*</span></label>
                                     <select name="program_id" required class="w-full" id="bulkTeacherProgram"></select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">CSV File *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">CSV File <span class="text-danger">*</span></label>
                                     <input type="file" name="file" accept=".csv" required class="w-full">
                                 </div>
-                                <div class="text-sm text-gray-500">
-                                    Required columns: <code>full_name, email</code>
+                                <div class="info-box info-box-info">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    Required columns: <code class="mono text-xs bg-white/50 px-1.5 py-0.5 rounded">full_name, email</code>
                                 </div>
-                                <button type="submit" class="btn-primary text-white px-6 py-2 rounded-lg">Upload Teachers</button>
+                                <button type="submit" class="btn-primary">Upload Teachers</button>
                             </form>
                             <div id="bulkTeacherResult" class="mt-4"></div>
                         </div>
                     </div>
                     
                     <div class="card p-6 mt-6">
-                        <h3 class="text-lg font-semibold mb-4"><i class="fas fa-file-alt text-gray-500 mr-2"></i>CSV Format Reference</h3>
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-lg bg-enterprise-100 flex items-center justify-center">
+                                <i class="fas fa-file-csv text-enterprise-600"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-enterprise-900">CSV Format Reference</h3>
+                                <p class="text-sm text-enterprise-500">Template examples for bulk uploads</p>
+                            </div>
+                        </div>
                         <div class="grid grid-cols-2 gap-6">
                             <div>
-                                <h4 class="font-medium mb-2">Student CSV Template</h4>
-                                <pre class="bg-gray-100 p-3 rounded text-sm overflow-x-auto">full_name,email,phone_number
+                                <h4 class="font-medium text-enterprise-800 mb-3">Student CSV Template</h4>
+                                <pre class="bg-enterprise-50 border border-enterprise-200 p-4 rounded-lg text-sm mono overflow-x-auto">full_name,email,phone_number
 Ahmed Mohammed,ahmed@academy.edu,+966501234567
 Sara Abdullah,sara@academy.edu,+966501234568</pre>
                             </div>
                             <div>
-                                <h4 class="font-medium mb-2">Teacher CSV Template</h4>
-                                <pre class="bg-gray-100 p-3 rounded text-sm overflow-x-auto">full_name,email
+                                <h4 class="font-medium text-enterprise-800 mb-3">Teacher CSV Template</h4>
+                                <pre class="bg-enterprise-50 border border-enterprise-200 p-4 rounded-lg text-sm mono overflow-x-auto">full_name,email
 Dr. Khalid Ibrahim,khalid@academy.edu
 Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                             </div>
@@ -325,23 +942,23 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
 
                 <!-- Allowances Page -->
                 <div id="page-allowances" class="page-content hidden">
-                    <div class="flex gap-4 mb-6">
-                        <button class="tab-btn active px-4 py-2 font-medium" data-tab="viewAllowances">View Allowances</button>
-                        <button class="tab-btn px-4 py-2 font-medium text-gray-500" data-tab="setAllowance">Set Individual</button>
-                        <button class="tab-btn px-4 py-2 font-medium text-gray-500" data-tab="bulkAllowance">Bulk Set</button>
-                        <button class="tab-btn px-4 py-2 font-medium text-gray-500" data-tab="addSupplement">Add Supplement</button>
+                    <div class="flex gap-1 mb-6 border-b border-enterprise-200">
+                        <button class="tab-btn active" data-tab="viewAllowances">View Allowances</button>
+                        <button class="tab-btn" data-tab="setAllowance">Set Individual</button>
+                        <button class="tab-btn" data-tab="bulkAllowance">Bulk Set</button>
+                        <button class="tab-btn" data-tab="addSupplement">Add Supplement</button>
                     </div>
                     
                     <div id="tab-viewAllowances" class="tab-content">
                         <div class="card">
-                            <div class="p-4 border-b flex items-center gap-4">
-                                <label class="font-medium">Filter Date:</label>
+                            <div class="p-4 border-b border-enterprise-100 flex items-center gap-4">
+                                <label class="text-sm font-medium text-enterprise-700">Filter by Date:</label>
                                 <input type="date" id="allowanceDate" class="w-48">
-                                <button onclick="loadAllowances()" class="btn-primary text-white px-4 py-2 rounded-lg">Load</button>
+                                <button onclick="loadAllowances()" class="btn-primary">Load Allowances</button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table>
-                                    <thead><tr><th>Student</th><th>Date</th><th>Base</th><th>Supplement</th><th>Total</th></tr></thead>
+                                    <thead><tr><th>Student</th><th>Date</th><th>Base Amount</th><th>Supplement</th><th>Total</th></tr></thead>
                                     <tbody id="allowancesTable"></tbody>
                                 </table>
                             </div>
@@ -349,78 +966,88 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     </div>
                     
                     <div id="tab-setAllowance" class="tab-content hidden">
-                        <div class="card p-6 max-w-lg">
-                            <h3 class="text-lg font-semibold mb-4">Set Individual Allowance</h3>
-                            <form id="setAllowanceForm" class="space-y-4">
+                        <div class="card p-8 max-w-lg">
+                            <div class="mb-6">
+                                <h3 class="font-semibold text-enterprise-900">Set Individual Allowance</h3>
+                                <p class="text-sm text-enterprise-500">Configure allowance for a specific student</p>
+                            </div>
+                            <form id="setAllowanceForm" class="space-y-5">
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Student *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Student <span class="text-danger">*</span></label>
                                     <select name="student_id" required class="w-full" id="allowanceStudent"></select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Date *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Date <span class="text-danger">*</span></label>
                                     <input type="date" name="date" required class="w-full">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Base Amount (SAR)</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Base Amount (SAR)</label>
                                     <input type="number" name="base_amount" value="50" step="0.01" class="w-full">
                                 </div>
-                                <button type="submit" class="btn-primary text-white px-6 py-2 rounded-lg">Set Allowance</button>
+                                <button type="submit" class="btn-primary">Set Allowance</button>
                             </form>
                         </div>
                     </div>
                     
                     <div id="tab-bulkAllowance" class="tab-content hidden">
-                        <div class="card p-6 max-w-lg">
-                            <h3 class="text-lg font-semibold mb-4">Bulk Set by Program</h3>
-                            <form id="bulkAllowanceForm" class="space-y-4">
+                        <div class="card p-8 max-w-lg">
+                            <div class="mb-6">
+                                <h3 class="font-semibold text-enterprise-900">Bulk Set by Program</h3>
+                                <p class="text-sm text-enterprise-500">Set allowances for all students in a program</p>
+                            </div>
+                            <form id="bulkAllowanceForm" class="space-y-5">
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Program *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Program <span class="text-danger">*</span></label>
                                     <select name="program_id" required class="w-full" id="bulkAllowanceProgram"></select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Date *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Date <span class="text-danger">*</span></label>
                                     <input type="date" name="date" required class="w-full">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Base Amount (SAR)</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Base Amount (SAR)</label>
                                     <input type="number" name="base_amount" value="50" step="0.01" class="w-full">
                                 </div>
-                                <div class="bg-amber-50 border border-amber-200 p-3 rounded text-sm">
-                                    <i class="fas fa-exclamation-triangle text-amber-500 mr-1"></i> This will set allowances for ALL active students in the selected program.
+                                <div class="info-box info-box-warning">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                                    This will set allowances for <strong>all active students</strong> in the selected program.
                                 </div>
-                                <button type="submit" class="btn-primary text-white px-6 py-2 rounded-lg">Set Bulk Allowances</button>
+                                <button type="submit" class="btn-primary">Set Bulk Allowances</button>
                             </form>
                         </div>
                     </div>
                     
                     <div id="tab-addSupplement" class="tab-content hidden">
-                        <div class="card p-6 max-w-lg">
-                            <h3 class="text-lg font-semibold mb-4"><i class="fas fa-plus-circle text-green-500 mr-2"></i>Add Supplement</h3>
-                            <p class="text-sm text-gray-500 mb-4">Add a supplement amount to a student's or teacher's existing allowance.</p>
-                            <form id="addSupplementForm" class="space-y-4">
+                        <div class="card p-8 max-w-lg">
+                            <div class="mb-6">
+                                <h3 class="font-semibold text-enterprise-900">Add Supplement</h3>
+                                <p class="text-sm text-enterprise-500">Add a supplement amount to an existing allowance</p>
+                            </div>
+                            <form id="addSupplementForm" class="space-y-5">
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Recipient Type *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Recipient Type <span class="text-danger">*</span></label>
                                     <select name="type" required class="w-full" id="supplementType" onchange="updateSupplementTargets()">
                                         <option value="student">Student</option>
                                         <option value="teacher">Teacher</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Select Recipient *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Select Recipient <span class="text-danger">*</span></label>
                                     <select name="target_id" required class="w-full" id="supplementTarget"></select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Date</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Date</label>
                                     <input type="date" name="date" class="w-full" id="supplementDate">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Supplement Amount (SAR) *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Supplement Amount (SAR) <span class="text-danger">*</span></label>
                                     <input type="number" name="amount" required step="0.01" class="w-full" placeholder="e.g., 25.00">
                                 </div>
-                                <div class="bg-green-50 border border-green-200 p-3 rounded text-sm">
-                                    <i class="fas fa-info-circle text-green-500 mr-1"></i> This amount will be added to the recipient's existing allowance for the selected date.
+                                <div class="info-box info-box-success">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    This amount will be added to the recipient's existing allowance for the selected date.
                                 </div>
-                                <button type="submit" class="btn-primary text-white px-6 py-2 rounded-lg">Add Supplement</button>
+                                <button type="submit" class="btn-primary">Add Supplement</button>
                             </form>
                         </div>
                     </div>
@@ -428,16 +1055,18 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
 
                 <!-- Programs Page -->
                 <div id="page-programs" class="page-content hidden">
-                    <div class="flex gap-4 mb-6">
-                        <button class="tab-btn active px-4 py-2 font-medium" data-tab="viewPrograms">All Programs</button>
-                        <button class="tab-btn px-4 py-2 font-medium text-gray-500" data-tab="createProgram">Create Program</button>
+                    <div class="flex gap-1 mb-6 border-b border-enterprise-200">
+                        <button class="tab-btn active" data-tab="viewPrograms">All Programs</button>
+                        <button class="tab-btn" data-tab="createProgram">Create Program</button>
                     </div>
                     
                     <div id="tab-viewPrograms" class="tab-content">
                         <div class="card">
-                            <div class="p-4 border-b flex justify-between items-center">
-                                <span class="font-medium">Programs / Cost Centers</span>
-                                <button onclick="loadPrograms()" class="btn-primary text-white px-4 py-2 rounded-lg">Refresh</button>
+                            <div class="p-4 border-b border-enterprise-100 flex justify-between items-center">
+                                <span class="font-medium text-enterprise-800">Programs / Cost Centers</span>
+                                <button onclick="loadPrograms()" class="btn-secondary flex items-center gap-2">
+                                    <i class="fas fa-sync-alt text-xs"></i> Refresh
+                                </button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table>
@@ -449,22 +1078,25 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     </div>
                     
                     <div id="tab-createProgram" class="tab-content hidden">
-                        <div class="card p-6 max-w-lg">
-                            <h3 class="text-lg font-semibold mb-4">Create New Program</h3>
-                            <form id="createProgramForm" class="space-y-4">
+                        <div class="card p-8 max-w-lg">
+                            <div class="mb-6">
+                                <h3 class="font-semibold text-enterprise-900">Create New Program</h3>
+                                <p class="text-sm text-enterprise-500">Add a new program or cost center</p>
+                            </div>
+                            <form id="createProgramForm" class="space-y-5">
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Program Name *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Program Name <span class="text-danger">*</span></label>
                                     <input type="text" name="name" required class="w-full" placeholder="e.g., Computer Science 2024">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Cost Center Code *</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Cost Center Code <span class="text-danger">*</span></label>
                                     <input type="text" name="cost_center" required class="w-full" placeholder="e.g., CC-CS-2024">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">Default Daily Allowance (SAR)</label>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Default Daily Allowance (SAR)</label>
                                     <input type="number" name="default_daily_allowance" value="50" step="0.01" class="w-full">
                                 </div>
-                                <button type="submit" class="btn-primary text-white px-6 py-2 rounded-lg">Create Program</button>
+                                <button type="submit" class="btn-primary">Create Program</button>
                             </form>
                         </div>
                     </div>
@@ -474,19 +1106,34 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 <div id="page-telemetry" class="page-content hidden">
                     <div class="grid grid-cols-3 gap-6 mb-6">
                         <div class="card p-6">
-                            <h3 class="font-semibold mb-4"><i class="fas fa-database text-blue-500 mr-2"></i>PostgreSQL</h3>
+                            <div class="flex items-center gap-3 mb-5">
+                                <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                                    <i class="fas fa-database text-blue-600"></i>
+                                </div>
+                                <h3 class="font-semibold text-enterprise-900">PostgreSQL</h3>
+                            </div>
                             <div class="space-y-2 text-sm" id="pgTelemetry">
                                 <div class="loading"></div>
                             </div>
                         </div>
                         <div class="card p-6">
-                            <h3 class="font-semibold mb-4"><i class="fab fa-envira text-green-500 mr-2"></i>MongoDB</h3>
+                            <div class="flex items-center gap-3 mb-5">
+                                <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+                                    <i class="fas fa-leaf text-green-600"></i>
+                                </div>
+                                <h3 class="font-semibold text-enterprise-900">MongoDB</h3>
+                            </div>
                             <div class="space-y-2 text-sm" id="mongoTelemetry">
                                 <div class="loading"></div>
                             </div>
                         </div>
                         <div class="card p-6">
-                            <h3 class="font-semibold mb-4"><i class="fas fa-bolt text-red-500 mr-2"></i>Redis</h3>
+                            <div class="flex items-center gap-3 mb-5">
+                                <div class="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
+                                    <i class="fas fa-bolt text-red-600"></i>
+                                </div>
+                                <h3 class="font-semibold text-enterprise-900">Redis</h3>
+                            </div>
                             <div class="space-y-2 text-sm" id="redisTelemetry">
                                 <div class="loading"></div>
                             </div>
@@ -495,13 +1142,23 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     
                     <div class="grid grid-cols-2 gap-6">
                         <div class="card p-6">
-                            <h3 class="font-semibold mb-4"><i class="fas fa-credit-card text-purple-500 mr-2"></i>Transactions</h3>
+                            <div class="flex items-center gap-3 mb-5">
+                                <div class="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+                                    <i class="fas fa-receipt text-purple-600"></i>
+                                </div>
+                                <h3 class="font-semibold text-enterprise-900">Transactions</h3>
+                            </div>
                             <div class="space-y-2" id="txTelemetry">
                                 <div class="loading"></div>
                             </div>
                         </div>
                         <div class="card p-6">
-                            <h3 class="font-semibold mb-4"><i class="fas fa-clipboard-check text-teal-500 mr-2"></i>Attendance</h3>
+                            <div class="flex items-center gap-3 mb-5">
+                                <div class="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center">
+                                    <i class="fas fa-clipboard-check text-teal-600"></i>
+                                </div>
+                                <h3 class="font-semibold text-enterprise-900">Attendance</h3>
+                            </div>
                             <div class="space-y-2" id="attTelemetry">
                                 <div class="loading"></div>
                             </div>
@@ -513,7 +1170,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
     </div>
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-3"></div>
 
     <script>
         const API_BASE = '/dashboard/api';
@@ -523,6 +1180,10 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
         let teachers = [];
         let transactionChart = null;
         let attendanceChart = null;
+
+        // Chart.js default configuration
+        Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
+        Chart.defaults.color = '#64748b';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -589,11 +1250,11 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     showDashboard();
                     loadDashboardData();
                 } else {
-                    document.getElementById('loginError').textContent = 'Invalid credentials';
+                    document.getElementById('loginError').textContent = 'Invalid credentials. Please try again.';
                     document.getElementById('loginError').classList.remove('hidden');
                 }
             } catch (err) {
-                document.getElementById('loginError').textContent = 'Login failed: ' + err.message;
+                document.getElementById('loginError').textContent = 'Connection failed. Please check your network.';
                 document.getElementById('loginError').classList.remove('hidden');
             }
         }
@@ -627,6 +1288,15 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             document.getElementById('mainDashboard').classList.remove('hidden');
         }
 
+        const pageBreadcrumbs = {
+            dashboard: 'Overview & Analytics',
+            users: 'Manage Students & Teachers',
+            bulk: 'Import Data via CSV',
+            allowances: 'Financial Management',
+            programs: 'Cost Centers & Programs',
+            telemetry: 'System Monitoring'
+        };
+
         function navigateTo(page) {
             document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
             document.querySelector(`[data-page="${page}"]`).classList.add('active');
@@ -636,6 +1306,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             
             const titles = { dashboard: 'Dashboard', users: 'User Management', bulk: 'Bulk Upload', allowances: 'Allowances', programs: 'Programs', telemetry: 'Telemetry' };
             document.getElementById('pageTitle').textContent = titles[page] || page;
+            document.getElementById('pageBreadcrumb').textContent = pageBreadcrumbs[page] || '';
             
             if (page === 'users') { loadStudents(); loadTeachers(); loadProgramSelects(); }
             if (page === 'bulk') { loadProgramSelects(); }
@@ -660,13 +1331,21 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 updateHealthDot('mongoHealth', data.mongodb.connected);
                 updateHealthDot('redisHealth', data.redis.connected);
                 
+                // Update service cards
+                document.getElementById('pgServiceCard').classList.toggle('healthy', data.postgres.connected);
+                document.getElementById('pgServiceCard').classList.toggle('unhealthy', !data.postgres.connected);
+                document.getElementById('mongoServiceCard').classList.toggle('healthy', data.mongodb.connected);
+                document.getElementById('mongoServiceCard').classList.toggle('unhealthy', !data.mongodb.connected);
+                document.getElementById('redisServiceCard').classList.toggle('healthy', data.redis.connected);
+                document.getElementById('redisServiceCard').classList.toggle('unhealthy', !data.redis.connected);
+                
                 document.getElementById('pgStatus').textContent = data.postgres.connected ? 'Connected' : 'Disconnected';
                 document.getElementById('mongoStatus').textContent = data.mongodb.connected ? 'Connected' : 'Disconnected';
                 document.getElementById('redisStatus').textContent = data.redis.connected ? 'Connected' : 'Disconnected';
                 
                 const indicator = document.getElementById('healthIndicator');
                 indicator.querySelector('.health-dot').className = `health-dot health-${data.overall === 'healthy' ? 'healthy' : 'unhealthy'}`;
-                indicator.querySelector('span').textContent = data.overall === 'healthy' ? 'All Systems Healthy' : 'System Degraded';
+                indicator.querySelector('span').textContent = data.overall === 'healthy' ? 'All Systems Operational' : 'System Degraded';
             } catch (e) {
                 console.error('Health check failed:', e);
             }
@@ -682,10 +1361,10 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const res = await fetch(`${API_BASE}/stats`);
                 const data = await res.json();
                 
-                document.getElementById('statStudents').textContent = data.total_students;
-                document.getElementById('statTeachers').textContent = data.total_teachers;
-                document.getElementById('statTransactions').textContent = data.transactions_today;
-                document.getElementById('statAttendance').textContent = data.attendance_today;
+                document.getElementById('statStudents').textContent = data.total_students.toLocaleString();
+                document.getElementById('statTeachers').textContent = data.total_teachers.toLocaleString();
+                document.getElementById('statTransactions').textContent = data.transactions_today.toLocaleString();
+                document.getElementById('statAttendance').textContent = data.attendance_today.toLocaleString();
             } catch (e) {
                 console.error('Stats failed:', e);
             }
@@ -712,13 +1391,33 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                         datasets: [{
                             label: 'Transactions',
                             data: txData.map(d => d.count),
-                            borderColor: '#f59e0b',
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.08)',
                             fill: true,
-                            tension: 0.4
+                            tension: 0.4,
+                            borderWidth: 2,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
                         }]
                     },
-                    options: { responsive: true, plugins: { legend: { display: false } } }
+                    options: { 
+                        responsive: true, 
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: '#f1f5f9' },
+                                ticks: { font: { size: 11 } }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { font: { size: 11 } }
+                            }
+                        }
+                    }
                 });
                 
                 const attCtx = document.getElementById('attendanceChart').getContext('2d');
@@ -730,12 +1429,32 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                             label: 'Attendance',
                             data: attData.map(d => d.count),
                             borderColor: '#8b5cf6',
-                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            backgroundColor: 'rgba(139, 92, 246, 0.08)',
                             fill: true,
-                            tension: 0.4
+                            tension: 0.4,
+                            borderWidth: 2,
+                            pointBackgroundColor: '#8b5cf6',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
                         }]
                     },
-                    options: { responsive: true, plugins: { legend: { display: false } } }
+                    options: { 
+                        responsive: true, 
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: '#f1f5f9' },
+                                ticks: { font: { size: 11 } }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { font: { size: 11 } }
+                            }
+                        }
+                    }
                 });
             } catch (e) {
                 console.error('Trends failed:', e);
@@ -750,13 +1469,14 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const tbody = document.getElementById('studentsTable');
                 tbody.innerHTML = students.map(s => `
                     <tr>
-                        <td>${s.full_name}</td>
-                        <td>${s.phone_number || '-'}</td>
-                        <td>${s.program_name || '-'}</td>
-                        <td><span class="px-2 py-1 rounded text-xs ${s.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${s.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td class="font-medium">${s.full_name}</td>
+                        <td class="mono text-enterprise-500">${s.phone_number || '—'}</td>
+                        <td>${s.program_name || '—'}</td>
+                        <td><span class="badge ${s.is_active ? 'badge-success' : 'badge-danger'}">${s.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td>
-                            <button onclick="toggleUserStatus('${s.user_id}', ${!s.is_active})" class="text-blue-600 hover:underline text-sm">${s.is_active ? 'Deactivate' : 'Activate'}</button>
-                            <button onclick="deleteUser('${s.user_id}')" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                            <button onclick="toggleUserStatus('${s.user_id}', ${!s.is_active})" class="action-link action-link-primary">${s.is_active ? 'Deactivate' : 'Activate'}</button>
+                            <span class="text-enterprise-300 mx-2">|</span>
+                            <button onclick="deleteUser('${s.user_id}')" class="action-link action-link-danger">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -773,12 +1493,13 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const tbody = document.getElementById('teachersTable');
                 tbody.innerHTML = teachers.map(t => `
                     <tr>
-                        <td>${t.full_name}</td>
-                        <td>${t.program_name || '-'}</td>
-                        <td><span class="px-2 py-1 rounded text-xs ${t.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${t.is_active ? 'Active' : 'Inactive'}</span></td>
+                        <td class="font-medium">${t.full_name}</td>
+                        <td>${t.program_name || '—'}</td>
+                        <td><span class="badge ${t.is_active ? 'badge-success' : 'badge-danger'}">${t.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td>
-                            <button onclick="toggleUserStatus('${t.user_id}', ${!t.is_active})" class="text-blue-600 hover:underline text-sm">${t.is_active ? 'Deactivate' : 'Activate'}</button>
-                            <button onclick="deleteUser('${t.user_id}')" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                            <button onclick="toggleUserStatus('${t.user_id}', ${!t.is_active})" class="action-link action-link-primary">${t.is_active ? 'Deactivate' : 'Activate'}</button>
+                            <span class="text-enterprise-300 mx-2">|</span>
+                            <button onclick="deleteUser('${t.user_id}')" class="action-link action-link-danger">Delete</button>
                         </td>
                     </tr>
                 `).join('');
@@ -796,14 +1517,14 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 if (tbody) {
                     tbody.innerHTML = programs.map(p => `
                         <tr>
-                            <td>${p.name}</td>
-                            <td>${p.cost_center}</td>
+                            <td class="font-medium">${p.name}</td>
+                            <td class="mono text-enterprise-500">${p.cost_center}</td>
                             <td>${p.default_daily_allowance} SAR</td>
                             <td>${p.student_count}</td>
                             <td>${p.teacher_count}</td>
-                            <td><span class="px-2 py-1 rounded text-xs ${p.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${p.is_active ? 'Active' : 'Inactive'}</span></td>
+                            <td><span class="badge ${p.is_active ? 'badge-success' : 'badge-danger'}">${p.is_active ? 'Active' : 'Inactive'}</span></td>
                             <td>
-                                <button onclick="deleteProgram('${p.program_id}')" class="text-red-600 hover:underline text-sm">Delete</button>
+                                <button onclick="deleteProgram('${p.program_id}')" class="action-link action-link-danger">Delete</button>
                             </td>
                         </tr>
                     `).join('');
@@ -838,13 +1559,13 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const tbody = document.getElementById('allowancesTable');
                 tbody.innerHTML = data.map(a => `
                     <tr>
-                        <td>${a.full_name}</td>
+                        <td class="font-medium">${a.full_name}</td>
                         <td>${a.date}</td>
                         <td>${a.base_amount} SAR</td>
                         <td>${a.bonus_amount} SAR</td>
-                        <td><strong>${a.total_amount} SAR</strong></td>
+                        <td class="font-semibold text-enterprise-900">${a.total_amount} SAR</td>
                     </tr>
-                `).join('') || '<tr><td colspan="5" class="text-center text-gray-500">No allowances found</td></tr>';
+                `).join('') || '<tr><td colspan="5" class="text-center text-enterprise-500 py-8">No allowances found for the selected criteria</td></tr>';
             } catch (e) {
                 showToast('Failed to load allowances', 'error');
             }
@@ -856,34 +1577,75 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const data = await res.json();
                 
                 document.getElementById('pgTelemetry').innerHTML = `
-                    <div><strong>Database Size:</strong> ${data.postgres.database_size}</div>
-                    <div class="mt-2"><strong>Tables:</strong></div>
-                    ${Object.entries(data.postgres.table_counts).map(([k,v]) => `<div class="text-gray-600 pl-2">${k}: ${v} rows</div>`).join('')}
+                    <div class="flex justify-between py-2 border-b border-enterprise-100">
+                        <span class="text-enterprise-600">Database Size</span>
+                        <span class="font-medium text-enterprise-900">${data.postgres.database_size}</span>
+                    </div>
+                    <div class="pt-2">
+                        <span class="text-enterprise-600 text-xs uppercase tracking-wide">Tables</span>
+                        ${Object.entries(data.postgres.table_counts).map(([k,v]) => `
+                            <div class="flex justify-between py-1.5 text-enterprise-600">
+                                <span>${k}</span>
+                                <span class="mono">${v} rows</span>
+                            </div>
+                        `).join('')}
+                    </div>
                 `;
                 
                 document.getElementById('mongoTelemetry').innerHTML = `
-                    <div><strong>Total Documents:</strong> ${data.mongodb.total_documents}</div>
-                    <div class="mt-2"><strong>Collections:</strong></div>
-                    ${Object.entries(data.mongodb.collections).map(([k,v]) => `<div class="text-gray-600 pl-2">${k}: ${v}</div>`).join('')}
+                    <div class="flex justify-between py-2 border-b border-enterprise-100">
+                        <span class="text-enterprise-600">Total Documents</span>
+                        <span class="font-medium text-enterprise-900">${data.mongodb.total_documents}</span>
+                    </div>
+                    <div class="pt-2">
+                        <span class="text-enterprise-600 text-xs uppercase tracking-wide">Collections</span>
+                        ${Object.entries(data.mongodb.collections).map(([k,v]) => `
+                            <div class="flex justify-between py-1.5 text-enterprise-600">
+                                <span>${k}</span>
+                                <span class="mono">${v}</span>
+                            </div>
+                        `).join('')}
+                    </div>
                 `;
                 
                 document.getElementById('redisTelemetry').innerHTML = `
-                    <div><strong>Memory:</strong> ${data.redis.memory}</div>
-                    <div><strong>Total Keys:</strong> ${data.redis.keys}</div>
+                    <div class="flex justify-between py-2 border-b border-enterprise-100">
+                        <span class="text-enterprise-600">Memory Usage</span>
+                        <span class="font-medium text-enterprise-900">${data.redis.memory}</span>
+                    </div>
+                    <div class="flex justify-between py-2">
+                        <span class="text-enterprise-600">Total Keys</span>
+                        <span class="font-medium text-enterprise-900">${data.redis.keys}</span>
+                    </div>
                 `;
                 
                 document.getElementById('txTelemetry').innerHTML = `
-                    <div class="grid grid-cols-3 gap-4 text-center">
-                        <div class="bg-gray-50 p-4 rounded"><div class="text-2xl font-bold">${data.transactions.today}</div><div class="text-xs text-gray-500">Today</div></div>
-                        <div class="bg-gray-50 p-4 rounded"><div class="text-2xl font-bold">${data.transactions.week}</div><div class="text-xs text-gray-500">This Week</div></div>
-                        <div class="bg-gray-50 p-4 rounded"><div class="text-2xl font-bold">${data.transactions.month}</div><div class="text-xs text-gray-500">This Month</div></div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="telemetry-stat">
+                            <div class="value">${data.transactions.today}</div>
+                            <div class="label">Today</div>
+                        </div>
+                        <div class="telemetry-stat">
+                            <div class="value">${data.transactions.week}</div>
+                            <div class="label">This Week</div>
+                        </div>
+                        <div class="telemetry-stat">
+                            <div class="value">${data.transactions.month}</div>
+                            <div class="label">This Month</div>
+                        </div>
                     </div>
                 `;
                 
                 document.getElementById('attTelemetry').innerHTML = `
-                    <div class="grid grid-cols-2 gap-4 text-center">
-                        <div class="bg-gray-50 p-4 rounded"><div class="text-2xl font-bold">${data.attendance.today}</div><div class="text-xs text-gray-500">Today</div></div>
-                        <div class="bg-gray-50 p-4 rounded"><div class="text-2xl font-bold">${data.attendance.week}</div><div class="text-xs text-gray-500">This Week</div></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="telemetry-stat">
+                            <div class="value">${data.attendance.today}</div>
+                            <div class="label">Today</div>
+                        </div>
+                        <div class="telemetry-stat">
+                            <div class="value">${data.attendance.week}</div>
+                            <div class="label">This Week</div>
+                        </div>
                     </div>
                 `;
             } catch (e) {
@@ -893,7 +1655,6 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
 
         function toggleUserFields(role) {
             document.getElementById('studentFields').classList.toggle('hidden', role !== 'student');
-            // Hide program select for store users
             document.getElementById('programSelectContainer').classList.toggle('hidden', role === 'store');
         }
 
@@ -968,7 +1729,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     body: JSON.stringify({ is_active: isActive })
                 });
                 if (res.ok) {
-                    showToast('Status updated', 'success');
+                    showToast('Status updated successfully', 'success');
                     loadStudents();
                     loadTeachers();
                 }
@@ -978,11 +1739,11 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
         }
 
         async function deleteUser(userId) {
-            if (!confirm('Are you sure you want to delete this user?')) return;
+            if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
             try {
                 const res = await fetch(`${API_BASE}/users/${userId}`, { method: 'DELETE' });
                 if (res.ok) {
-                    showToast('User deleted', 'success');
+                    showToast('User deleted successfully', 'success');
                     loadStudents();
                     loadTeachers();
                 }
@@ -1001,14 +1762,15 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const result = await res.json();
                 
                 document.getElementById('bulkStudentResult').innerHTML = `
-                    <div class="bg-green-50 border border-green-200 p-3 rounded">
-                        ✅ Created ${result.created} students
-                        ${result.errors.length > 0 ? `<br><span class="text-red-600">Errors: ${result.errors.length}</span>` : ''}
+                    <div class="info-box ${result.errors?.length > 0 ? 'info-box-warning' : 'info-box-success'}">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        Successfully created ${result.created} students
+                        ${result.errors?.length > 0 ? `<br><span class="text-amber-700 mt-1 block"><i class="fas fa-exclamation-triangle mr-1"></i> ${result.errors.length} errors occurred</span>` : ''}
                     </div>
                 `;
                 loadStudents();
             } catch (e) {
-                document.getElementById('bulkStudentResult').innerHTML = `<div class="bg-red-50 border border-red-200 p-3 rounded text-red-600">Error: ${e.message}</div>`;
+                document.getElementById('bulkStudentResult').innerHTML = `<div class="info-box info-box-warning"><i class="fas fa-times-circle mr-2"></i> Error: ${e.message}</div>`;
             }
         }
 
@@ -1022,14 +1784,15 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 const result = await res.json();
                 
                 document.getElementById('bulkTeacherResult').innerHTML = `
-                    <div class="bg-green-50 border border-green-200 p-3 rounded">
-                        ✅ Created ${result.created} teachers
-                        ${result.errors.length > 0 ? `<br><span class="text-red-600">Errors: ${result.errors.length}</span>` : ''}
+                    <div class="info-box ${result.errors?.length > 0 ? 'info-box-warning' : 'info-box-success'}">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        Successfully created ${result.created} teachers
+                        ${result.errors?.length > 0 ? `<br><span class="text-amber-700 mt-1 block"><i class="fas fa-exclamation-triangle mr-1"></i> ${result.errors.length} errors occurred</span>` : ''}
                     </div>
                 `;
                 loadTeachers();
             } catch (e) {
-                document.getElementById('bulkTeacherResult').innerHTML = `<div class="bg-red-50 border border-red-200 p-3 rounded text-red-600">Error: ${e.message}</div>`;
+                document.getElementById('bulkTeacherResult').innerHTML = `<div class="info-box info-box-warning"><i class="fas fa-times-circle mr-2"></i> Error: ${e.message}</div>`;
             }
         }
 
@@ -1083,7 +1846,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     body: JSON.stringify(data)
                 });
                 if (res.ok) {
-                    showToast('Program created!', 'success');
+                    showToast('Program created successfully!', 'success');
                     e.target.reset();
                     loadPrograms();
                     loadProgramSelects();
@@ -1094,12 +1857,12 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
         }
 
         async function deleteProgram(programId) {
-            if (!confirm('Are you sure you want to delete this program?')) return;
+            if (!confirm('Are you sure you want to delete this program? This action cannot be undone.')) return;
             try {
                 const res = await fetch(`${API_BASE}/programs/${programId}`, { method: 'DELETE' });
                 const result = await res.json();
                 if (res.ok) {
-                    showToast('Program deleted', 'success');
+                    showToast('Program deleted successfully', 'success');
                     loadPrograms();
                 } else {
                     showToast(result.detail || 'Cannot delete program', 'error');
@@ -1110,11 +1873,28 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
         }
 
         function showToast(message, type = 'info') {
-            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
-            toast.className = `toast ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg`;
-            toast.textContent = message;
-            document.getElementById('toastContainer').appendChild(toast);
+            
+            const bgColors = {
+                success: 'bg-emerald-600',
+                error: 'bg-red-600',
+                info: 'bg-blue-600'
+            };
+            
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-times-circle',
+                info: 'fa-info-circle'
+            };
+            
+            toast.className = `toast ${bgColors[type]} text-white px-5 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-80`;
+            toast.innerHTML = `
+                <i class="fas ${icons[type]}"></i>
+                <span class="text-sm font-medium">${message}</span>
+            `;
+            
+            container.appendChild(toast);
             setTimeout(() => toast.remove(), 4000);
         }
     </script>
