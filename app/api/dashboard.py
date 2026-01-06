@@ -498,21 +498,97 @@ async def update_user_status(user_id: str, data: dict):
 
 @router.delete("/api/users/{user_id}")
 async def delete_user(user_id: str):
-    """Delete a user."""
+    """Delete a user and all related records."""
     try:
         if mongodb.db is None:
             raise HTTPException(status_code=503, detail="MongoDB not connected")
-            
-        await mongodb.db.users.delete_one({"user_id": user_id})
         
         async with async_session_factory() as session:
-            await session.execute(text(
-                "DELETE FROM students WHERE user_id = :user_id"
+            # First get the student_id if this is a student
+            result = await session.execute(text(
+                "SELECT student_id FROM students WHERE user_id = :user_id"
             ), {"user_id": user_id})
-            await session.execute(text(
-                "DELETE FROM teachers WHERE user_id = :user_id"
+            student_row = result.fetchone()
+            
+            if student_row:
+                student_id = str(student_row[0])
+                
+                # Delete in FK-safe order for student-related tables
+                # 1. Delete attendance records (references students via session, but also directly)
+                await session.execute(text(
+                    "DELETE FROM attendance_records WHERE student_id = :student_id"
+                ), {"student_id": student_id})
+                
+                # 2. Delete class enrollments
+                await session.execute(text(
+                    "DELETE FROM class_enrollments WHERE student_id = :student_id"
+                ), {"student_id": student_id})
+                
+                # 3. Delete store transactions
+                await session.execute(text(
+                    "DELETE FROM store_transactions WHERE student_id = :student_id"
+                ), {"student_id": student_id})
+                
+                # 4. Delete daily allowances
+                await session.execute(text(
+                    "DELETE FROM daily_allowances WHERE student_id = :student_id"
+                ), {"student_id": student_id})
+                
+                # 5. Finally delete the student record
+                await session.execute(text(
+                    "DELETE FROM students WHERE user_id = :user_id"
+                ), {"user_id": user_id})
+            
+            # Check if this is a teacher
+            result = await session.execute(text(
+                "SELECT teacher_id FROM teachers WHERE user_id = :user_id"
             ), {"user_id": user_id})
+            teacher_row = result.fetchone()
+            
+            if teacher_row:
+                teacher_id = str(teacher_row[0])
+                
+                # Delete teacher-related records
+                # 1. Delete teacher meal transactions
+                await session.execute(text(
+                    "DELETE FROM teacher_meal_transactions WHERE teacher_id = :teacher_id"
+                ), {"teacher_id": teacher_id})
+                
+                # 2. Delete teacher daily allowances
+                await session.execute(text(
+                    "DELETE FROM teacher_daily_allowances WHERE teacher_id = :teacher_id"
+                ), {"teacher_id": teacher_id})
+                
+                # 3. Delete teacher program associations
+                await session.execute(text(
+                    "DELETE FROM teacher_programs WHERE teacher_id = :teacher_id"
+                ), {"teacher_id": teacher_id})
+                
+                # 4. Delete attendance sessions created by this teacher
+                await session.execute(text(
+                    "DELETE FROM attendance_records WHERE session_id IN (SELECT session_id FROM attendance_sessions WHERE created_by = :user_id)"
+                ), {"user_id": user_id})
+                await session.execute(text(
+                    "DELETE FROM attendance_sessions WHERE created_by = :user_id"
+                ), {"user_id": user_id})
+                
+                # 5. Update classes to remove teacher reference or delete them
+                await session.execute(text(
+                    "DELETE FROM class_enrollments WHERE class_id IN (SELECT class_id FROM classes WHERE teacher_id = :teacher_id)"
+                ), {"teacher_id": teacher_id})
+                await session.execute(text(
+                    "DELETE FROM classes WHERE teacher_id = :teacher_id"
+                ), {"teacher_id": teacher_id})
+                
+                # 6. Finally delete the teacher record
+                await session.execute(text(
+                    "DELETE FROM teachers WHERE user_id = :user_id"
+                ), {"user_id": user_id})
+            
             await session.commit()
+        
+        # Delete from MongoDB
+        await mongodb.db.users.delete_one({"user_id": user_id})
         
         return {"success": True}
     except HTTPException:
