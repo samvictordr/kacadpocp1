@@ -133,6 +133,10 @@ app.include_router(store_router)
 app.include_router(admin_router)
 app.include_router(dashboard_router)
 
+# Mount static files directory for CSS, JS, and other assets
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 # Serve dashboard HTML at /dashboard/
 @app.get("/dashboard/", response_class=FileResponse)
