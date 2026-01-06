@@ -72,6 +72,7 @@ class Student(Base):
     student_id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(PGUUID(as_uuid=True), unique=True, nullable=False)
     full_name = Column(Text, nullable=False)
+    phone_number = Column(Text, unique=True, nullable=True)  # Saudi format: +966XXXXXXXXX
     program_id = Column(PGUUID(as_uuid=True), ForeignKey("programs.program_id"), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

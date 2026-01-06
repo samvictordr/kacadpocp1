@@ -11,6 +11,7 @@ import uuid
 import hashlib
 import io
 import csv
+import re
 
 from app.db.postgres import async_session_factory
 from app.db.mongodb import mongodb
@@ -18,6 +19,41 @@ from app.db.redis import redis_client
 from app.core.security import verify_password, hash_password
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+# ==================== PHONE VALIDATION ====================
+
+def validate_saudi_phone(phone: str) -> tuple[bool, str]:
+    """
+    Validate Saudi Arabian phone number.
+    Accepted formats:
+    - +966XXXXXXXXX (9 digits after country code)
+    - 05XXXXXXXX (10 digits starting with 05)
+    Returns normalized format: +966XXXXXXXXX
+    """
+    if not phone or phone.strip() == "":
+        return True, ""  # Empty phone is allowed
+    
+    phone = phone.strip().replace(" ", "").replace("-", "")
+    
+    # Pattern for +966 format
+    if phone.startswith("+966"):
+        digits = phone[4:]
+        if len(digits) == 9 and digits.isdigit() and digits[0] == "5":
+            return True, phone
+        return False, "Invalid Saudi phone: must be +966 followed by 9 digits starting with 5"
+    
+    # Pattern for 05 format
+    if phone.startswith("05"):
+        if len(phone) == 10 and phone.isdigit():
+            return True, "+966" + phone[1:]  # Convert to international format
+        return False, "Invalid Saudi phone: must be 10 digits starting with 05"
+    
+    # Pattern for 5 format (without leading 0)
+    if phone.startswith("5") and len(phone) == 9 and phone.isdigit():
+        return True, "+966" + phone
+    
+    return False, "Invalid Saudi phone format. Use +966XXXXXXXXX or 05XXXXXXXX"
 
 
 # ==================== HEALTH & TELEMETRY ====================
@@ -280,14 +316,14 @@ async def get_all_teachers():
     try:
         async with async_session_factory() as session:
             result = await session.execute(text("""
-                SELECT t.teacher_id, t.user_id, t.full_name, t.employee_id,
+                SELECT t.teacher_id, t.user_id, t.full_name,
                        t.program_id, t.is_active, p.name as program_name
                 FROM teachers t
                 LEFT JOIN programs p ON t.program_id = p.program_id
                 ORDER BY t.full_name
             """))
             rows = result.fetchall()
-            columns = ["teacher_id", "user_id", "full_name", "employee_id", "program_id", "is_active", "program_name"]
+            columns = ["teacher_id", "user_id", "full_name", "program_id", "is_active", "program_name"]
             return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -321,6 +357,24 @@ async def create_user(data: dict):
     try:
         if mongodb.db is None:
             raise HTTPException(status_code=503, detail="MongoDB not connected")
+        
+        role = data["role"]
+        
+        # Validate phone number for students
+        phone_number = data.get("phone_number", "")
+        if role == "student" and phone_number:
+            is_valid, normalized = validate_saudi_phone(phone_number)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=normalized)
+            phone_number = normalized
+            
+            # Check uniqueness
+            async with async_session_factory() as session:
+                result = await session.execute(text(
+                    "SELECT student_id FROM students WHERE phone_number = :phone"
+                ), {"phone": phone_number})
+                if result.scalar():
+                    raise HTTPException(status_code=400, detail="Phone number already registered")
             
         user_id = str(uuid.uuid4())
         password_hash = hash_password(data.get("password", "temp123"))
@@ -331,7 +385,7 @@ async def create_user(data: dict):
             "email": data["email"],
             "name": data["full_name"],
             "full_name": data["full_name"],
-            "role": data["role"],
+            "role": role,
             "status": "active",
             "auth": {
                 "password_hash": password_hash,
@@ -345,7 +399,7 @@ async def create_user(data: dict):
         })
         
         async with async_session_factory() as session:
-            if data["role"] == "student":
+            if role == "student":
                 await session.execute(text("""
                     INSERT INTO students (student_id, user_id, full_name, phone_number, program_id, is_active)
                     VALUES (:student_id, :user_id, :full_name, :phone_number, :program_id, true)
@@ -353,20 +407,20 @@ async def create_user(data: dict):
                     "student_id": str(uuid.uuid4()),
                     "user_id": user_id,
                     "full_name": data["full_name"],
-                    "phone_number": data.get("phone_number", ""),
+                    "phone_number": phone_number or None,
                     "program_id": data.get("program_id")
                 })
-            elif data["role"] == "teacher":
+            elif role == "teacher":
                 await session.execute(text("""
-                    INSERT INTO teachers (teacher_id, user_id, full_name, employee_id, program_id, is_active, created_at)
-                    VALUES (:teacher_id, :user_id, :full_name, :employee_id, :program_id, true, NOW())
+                    INSERT INTO teachers (teacher_id, user_id, full_name, program_id, is_active, created_at)
+                    VALUES (:teacher_id, :user_id, :full_name, :program_id, true, NOW())
                 """), {
                     "teacher_id": str(uuid.uuid4()),
                     "user_id": user_id,
                     "full_name": data["full_name"],
-                    "employee_id": data.get("employee_id", ""),
                     "program_id": data.get("program_id")
                 })
+            # Store users only get MongoDB entry, no PostgreSQL record needed
             await session.commit()
         
         return {"success": True, "user_id": user_id}
@@ -634,6 +688,93 @@ async def bulk_allowances(data: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/api/supplements")
+async def add_supplement(data: dict):
+    """
+    Add a supplement (bonus) to an existing allowance.
+    This adds to the current bonus_amount without changing base_amount.
+    Works for both students and teachers.
+    """
+    try:
+        from datetime import date as date_type
+        
+        target_type = data.get("type", "student")  # "student" or "teacher"
+        target_id = data["target_id"]
+        supplement_amount = float(data["amount"])
+        supplement_date = data.get("date", str(date_type.today()))
+        
+        if isinstance(supplement_date, str):
+            supplement_date = date_type.fromisoformat(supplement_date)
+        
+        async with async_session_factory() as session:
+            if target_type == "student":
+                # Check if allowance exists for this date
+                result = await session.execute(text("""
+                    SELECT allowance_id, base_amount, bonus_amount 
+                    FROM daily_allowances 
+                    WHERE student_id = :target_id AND date = :date
+                """), {"target_id": target_id, "date": supplement_date})
+                existing = result.fetchone()
+                
+                if existing:
+                    new_bonus = float(existing[2]) + supplement_amount
+                    new_total = float(existing[1]) + new_bonus
+                    await session.execute(text("""
+                        UPDATE daily_allowances 
+                        SET bonus_amount = :bonus, total_amount = :total
+                        WHERE student_id = :target_id AND date = :date
+                    """), {
+                        "bonus": new_bonus, "total": new_total,
+                        "target_id": target_id, "date": supplement_date
+                    })
+                else:
+                    # Create new allowance with supplement only
+                    await session.execute(text("""
+                        INSERT INTO daily_allowances (allowance_id, student_id, date, base_amount, bonus_amount, total_amount)
+                        VALUES (:allowance_id, :target_id, :date, 0, :bonus, :bonus)
+                    """), {
+                        "allowance_id": str(uuid.uuid4()),
+                        "target_id": target_id,
+                        "date": supplement_date,
+                        "bonus": supplement_amount
+                    })
+            else:  # teacher
+                result = await session.execute(text("""
+                    SELECT allowance_id, base_amount, bonus_amount 
+                    FROM teacher_daily_allowances 
+                    WHERE teacher_id = :target_id AND date = :date
+                """), {"target_id": target_id, "date": supplement_date})
+                existing = result.fetchone()
+                
+                if existing:
+                    new_bonus = float(existing[2]) + supplement_amount
+                    new_total = float(existing[1]) + new_bonus
+                    await session.execute(text("""
+                        UPDATE teacher_daily_allowances 
+                        SET bonus_amount = :bonus, total_amount = :total
+                        WHERE teacher_id = :target_id AND date = :date
+                    """), {
+                        "bonus": new_bonus, "total": new_total,
+                        "target_id": target_id, "date": supplement_date
+                    })
+                else:
+                    await session.execute(text("""
+                        INSERT INTO teacher_daily_allowances (allowance_id, teacher_id, date, base_amount, bonus_amount, total_amount)
+                        VALUES (:allowance_id, :target_id, :date, 0, :bonus, :bonus)
+                    """), {
+                        "allowance_id": str(uuid.uuid4()),
+                        "target_id": target_id,
+                        "date": supplement_date,
+                        "bonus": supplement_amount
+                    })
+            
+            await session.commit()
+        
+        return {"success": True, "message": f"Supplement of {supplement_amount} SAR added"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== BULK UPLOAD ====================
 
 @router.post("/api/bulk/students")
@@ -650,6 +791,15 @@ async def bulk_upload_students(file: UploadFile = File(...), program_id: str = F
         
         for row in reader:
             try:
+                # Validate phone number
+                phone_number = row.get("phone_number", "")
+                if phone_number:
+                    is_valid, result = validate_saudi_phone(phone_number)
+                    if not is_valid:
+                        errors.append({"row": row.get("email", "?"), "error": result})
+                        continue
+                    phone_number = result
+                
                 user_id = str(uuid.uuid4())
                 password_hash = hash_password("temp123")
                 
@@ -680,7 +830,7 @@ async def bulk_upload_students(file: UploadFile = File(...), program_id: str = F
                         "student_id": str(uuid.uuid4()),
                         "user_id": user_id,
                         "full_name": row["full_name"],
-                        "phone_number": row.get("phone_number", ""),
+                        "phone_number": phone_number or None,
                         "program_id": program_id
                     })
                     await session.commit()
@@ -733,13 +883,12 @@ async def bulk_upload_teachers(file: UploadFile = File(...), program_id: str = F
                 
                 async with async_session_factory() as session:
                     await session.execute(text("""
-                        INSERT INTO teachers (teacher_id, user_id, full_name, employee_id, program_id, is_active, created_at)
-                        VALUES (:teacher_id, :user_id, :full_name, :employee_id, :program_id, true, NOW())
+                        INSERT INTO teachers (teacher_id, user_id, full_name, program_id, is_active, created_at)
+                        VALUES (:teacher_id, :user_id, :full_name, :program_id, true, NOW())
                     """), {
                         "teacher_id": str(uuid.uuid4()),
                         "user_id": user_id,
                         "full_name": row["full_name"],
-                        "employee_id": row.get("employee_id", ""),
                         "program_id": program_id
                     })
                     await session.commit()
