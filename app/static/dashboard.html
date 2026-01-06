@@ -407,13 +407,20 @@
                                     </div>
                                     <div id="programSelectContainer">
                                         <label>Program <span id="programRequiredStar" style="color: #dc2626;">*</span></label>
-                                        <select name="program_id" id="createUserProgram"></select>
+                                        <select name="program_id" id="createUserProgram" onchange="loadClassesForProgram(this.value, 'createUserClass')"></select>
                                     </div>
                                 </div>
                                 <div id="teacherProgramsContainer" class="hidden" style="margin-bottom: 20px;">
                                     <label>Programs <span style="font-weight: normal; color: #64748b;">(Teachers can be assigned to multiple programs)</span></label>
                                     <select name="program_ids" id="createUserProgramsMulti" multiple style="min-height: 100px;"></select>
                                     <p style="font-size: 12px; color: #64748b; margin-top: 6px;">Hold Ctrl/Cmd to select multiple programs</p>
+                                </div>
+                                <div id="classSelectContainer" style="margin-bottom: 20px;">
+                                    <label>Class <span style="font-weight: normal; color: #64748b;">(Required for attendance)</span></label>
+                                    <select name="class_id" id="createUserClass">
+                                        <option value="">Select Class (optional)</option>
+                                    </select>
+                                    <p style="font-size: 12px; color: #64748b; margin-top: 6px;">Students must be enrolled in a class to receive attendance QR codes</p>
                                 </div>
                                 <div id="studentFields" style="margin-bottom: 20px;">
                                     <label>Phone Number</label>
@@ -448,7 +455,13 @@
                             <form id="bulkStudentForm">
                                 <div style="margin-bottom: 16px;">
                                     <label>Program <span style="color: #dc2626;">*</span></label>
-                                    <select name="program_id" required id="bulkStudentProgram"></select>
+                                    <select name="program_id" required id="bulkStudentProgram" onchange="loadBulkStudentClasses()"></select>
+                                </div>
+                                <div style="margin-bottom: 16px;" id="bulkStudentClassContainer">
+                                    <label>Class <span style="font-weight: normal; color: #64748b;">(Enroll all students in this class)</span></label>
+                                    <select name="class_id" id="bulkStudentClass">
+                                        <option value="">No class enrollment</option>
+                                    </select>
                                 </div>
                                 <div style="margin-bottom: 16px;">
                                     <label>CSV File <span style="color: #dc2626;">*</span></label>
@@ -456,7 +469,7 @@
                                 </div>
                                 <div class="info-box info-box-info" style="margin-bottom: 16px;">
                                     <i class="fa-solid fa-circle-info" style="margin-top: 2px;"></i>
-                                    <span>Required columns: <code class="mono" style="background: rgba(255,255,255,0.5); padding: 2px 6px; border-radius: 4px; font-size: 12px;">full_name, email, phone_number</code></span>
+                                    <span>Required columns: <code class="mono" style="background: rgba(255,255,255,0.5); padding: 2px 6px; border-radius: 4px; font-size: 12px;">full_name, email, phone_number</code>. Optional: <code class="mono" style="background: rgba(255,255,255,0.5); padding: 2px 6px; border-radius: 4px; font-size: 12px;">class_id</code></span>
                                 </div>
                                 <button type="submit" class="btn-primary">Upload Students</button>
                             </form>
@@ -1327,8 +1340,31 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
         function toggleUserFields(role) {
             document.getElementById('studentFields').classList.toggle('hidden', role !== 'student');
             document.getElementById('programSelectContainer').classList.toggle('hidden', role !== 'student');
+            document.getElementById('classSelectContainer').classList.toggle('hidden', role !== 'student');
             document.getElementById('teacherProgramsContainer').classList.toggle('hidden', role !== 'teacher');
             document.getElementById('programRequiredStar').style.display = role === 'student' ? 'inline' : 'none';
+        }
+
+        async function loadClassesForProgram(programId, targetSelectId) {
+            const select = document.getElementById(targetSelectId);
+            if (!programId) {
+                select.innerHTML = '<option value="">Select a program first</option>';
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_BASE}/classes?program_id=${programId}`);
+                const classes = await res.json();
+                select.innerHTML = '<option value="">Select Class (optional)</option>' +
+                    classes.map(c => `<option value="${c.class_id}">${c.name}${c.teacher_name ? ' (' + c.teacher_name + ')' : ''}</option>`).join('');
+            } catch (e) {
+                select.innerHTML = '<option value="">Failed to load classes</option>';
+            }
+        }
+
+        async function loadBulkStudentClasses() {
+            const programId = document.getElementById('bulkStudentProgram').value;
+            await loadClassesForProgram(programId, 'bulkStudentClass');
         }
 
         async function updateSupplementTargets() {

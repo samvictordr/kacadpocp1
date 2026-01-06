@@ -423,16 +423,29 @@ async def create_user(data: dict):
         
         async with async_session_factory() as session:
             if role == "student":
+                student_id = str(uuid.uuid4())
                 await session.execute(text("""
                     INSERT INTO students (student_id, user_id, full_name, phone_number, program_id, is_active)
                     VALUES (:student_id, :user_id, :full_name, :phone_number, :program_id, true)
                 """), {
-                    "student_id": str(uuid.uuid4()),
+                    "student_id": student_id,
                     "user_id": user_id,
                     "full_name": data["full_name"],
                     "phone_number": phone_number or None,
                     "program_id": data.get("program_id")
                 })
+                
+                # Enroll student in class if class_id provided
+                class_id = data.get("class_id")
+                if class_id:
+                    await session.execute(text("""
+                        INSERT INTO class_enrollments (class_id, student_id)
+                        VALUES (:class_id, :student_id)
+                        ON CONFLICT (class_id, student_id) DO NOTHING
+                    """), {
+                        "class_id": class_id,
+                        "student_id": student_id
+                    })
             elif role == "teacher":
                 teacher_id = str(uuid.uuid4())
                 # Get first program_id for backward compatibility (legacy column)
@@ -1017,8 +1030,12 @@ async def add_supplement(data: dict):
 # ==================== BULK UPLOAD ====================
 
 @router.post("/api/bulk/students")
-async def bulk_upload_students(file: UploadFile = File(...), program_id: str = Form(...)):
-    """Bulk upload students from CSV."""
+async def bulk_upload_students(
+    file: UploadFile = File(...), 
+    program_id: str = Form(...),
+    class_id: Optional[str] = Form(None)
+):
+    """Bulk upload students from CSV. Optionally enroll all in a class."""
     try:
         if mongodb.db is None:
             raise HTTPException(status_code=503, detail="MongoDB not connected")
@@ -1040,7 +1057,11 @@ async def bulk_upload_students(file: UploadFile = File(...), program_id: str = F
                     phone_number = result
                 
                 user_id = str(uuid.uuid4())
+                student_id = str(uuid.uuid4())
                 password_hash = hash_password("temp123")
+                
+                # Check if CSV row has a class_id column (overrides form class_id)
+                row_class_id = row.get("class_id", "").strip() or class_id
                 
                 await mongodb.db.users.insert_one({
                     "_id": user_id,
@@ -1066,12 +1087,24 @@ async def bulk_upload_students(file: UploadFile = File(...), program_id: str = F
                         INSERT INTO students (student_id, user_id, full_name, phone_number, program_id, is_active)
                         VALUES (:student_id, :user_id, :full_name, :phone_number, :program_id, true)
                     """), {
-                        "student_id": str(uuid.uuid4()),
+                        "student_id": student_id,
                         "user_id": user_id,
                         "full_name": row["full_name"],
                         "phone_number": phone_number or None,
                         "program_id": program_id
                     })
+                    
+                    # Enroll in class if class_id provided
+                    if row_class_id:
+                        await session.execute(text("""
+                            INSERT INTO class_enrollments (class_id, student_id)
+                            VALUES (:class_id, :student_id)
+                            ON CONFLICT (class_id, student_id) DO NOTHING
+                        """), {
+                            "class_id": row_class_id,
+                            "student_id": student_id
+                        })
+                    
                     await session.commit()
                 created += 1
             except Exception as e:
