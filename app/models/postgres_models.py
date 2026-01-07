@@ -41,6 +41,8 @@ class Program(Base):
     program_id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(Text, nullable=False)
     cost_center_code = Column(Text, nullable=False)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
     active = Column(Boolean, default=True, nullable=False)
     
     # Relationships
