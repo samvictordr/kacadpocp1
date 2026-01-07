@@ -15,10 +15,13 @@ CREATE TABLE programs (
     program_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
     cost_center_code TEXT NOT NULL,
-    active BOOLEAN NOT NULL DEFAULT TRUE
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    start_date DATE,  -- Program start date
+    end_date DATE     -- Program end date (auto-deactivate when passed)
 );
 
 CREATE INDEX idx_programs_active ON programs(active);
+CREATE INDEX idx_programs_end_date ON programs(end_date);
 
 -- ============================================================
 -- Students Table

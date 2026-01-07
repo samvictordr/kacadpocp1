@@ -370,14 +370,16 @@ async def get_all_programs():
             """))
             rows = result.fetchall()
             columns = ["program_id", "name", "cost_center", "default_daily_allowance", "is_active", "start_date", "end_date", "student_count", "teacher_count"]
-            programs = [dict(zip(columns, row)) for row in rows]
-            # Convert dates to strings
-            for prog in programs:
+            programs_list = []
+            for row in rows:
+                prog = dict(zip(columns, row))
+                # Convert dates to strings for JSON serialization
                 if prog.get("start_date"):
                     prog["start_date"] = str(prog["start_date"])
                 if prog.get("end_date"):
                     prog["end_date"] = str(prog["end_date"])
-            return programs
+                programs_list.append(prog)
+            return programs_list
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -626,13 +628,13 @@ async def create_program(data: dict):
     try:
         program_id = str(uuid.uuid4())
         cost_center = data.get("cost_center", data.get("cost_center_code", "GEN-001"))
-        start_date = data.get("start_date")
-        end_date = data.get("end_date")
+        start_date = data.get("start_date") or None
+        end_date = data.get("end_date") or None
         
         async with async_session_factory() as session:
             await session.execute(text("""
-                INSERT INTO programs (program_id, name, cost_center_code, cost_center, default_daily_allowance, start_date, end_date, is_active, active)
-                VALUES (:program_id, :name, :cost_center_code, :cost_center, :default_daily_allowance, :start_date, :end_date, true, true)
+                INSERT INTO programs (program_id, name, cost_center_code, cost_center, default_daily_allowance, is_active, active, start_date, end_date)
+                VALUES (:program_id, :name, :cost_center_code, :cost_center, :default_daily_allowance, true, true, :start_date, :end_date)
             """), {
                 "program_id": program_id,
                 "name": data["name"],
@@ -655,84 +657,169 @@ async def update_program(program_id: str, data: dict):
     try:
         cost_center = data.get("cost_center", data.get("cost_center_code", "GEN-001"))
         is_active = data.get("is_active", True)
-        start_date = data.get("start_date")
-        end_date = data.get("end_date")
+        start_date = data.get("start_date") or None
+        end_date = data.get("end_date") or None
         
         async with async_session_factory() as session:
-            # Check if program is being deactivated
+            # Get current program active state to check if deactivating
             result = await session.execute(text(
                 "SELECT is_active FROM programs WHERE program_id = :program_id"
             ), {"program_id": program_id})
-            current_active = result.scalar()
+            row = result.fetchone()
+            was_active = row[0] if row else True
             
-            # Update program
             await session.execute(text("""
                 UPDATE programs SET name = :name, cost_center = :cost_center, cost_center_code = :cost_center_code,
-                default_daily_allowance = :default_daily_allowance, start_date = :start_date, end_date = :end_date,
-                is_active = :is_active, active = :active 
+                default_daily_allowance = :default_daily_allowance, is_active = :is_active, active = :active,
+                start_date = :start_date, end_date = :end_date
                 WHERE program_id = :program_id
             """), {
                 "name": data["name"],
                 "cost_center": cost_center,
                 "cost_center_code": cost_center,
                 "default_daily_allowance": float(data.get("default_daily_allowance", 50.0)),
-                "start_date": start_date,
-                "end_date": end_date,
                 "is_active": is_active,
                 "active": is_active,
+                "start_date": start_date,
+                "end_date": end_date,
                 "program_id": program_id
             })
             
-            # If program is being deactivated, deactivate associated students and teachers
-            if current_active and not is_active:
-                # Deactivate students
-                await session.execute(text("""
-                    UPDATE students SET is_active = false 
-                    WHERE program_id = :program_id AND is_active = true
-                """), {"program_id": program_id})
-                
-                # Deactivate teachers via teacher_programs junction table
-                result = await session.execute(text("""
-                    SELECT teacher_id FROM teacher_programs WHERE program_id = :program_id
-                """), {"program_id": program_id})
-                teacher_ids = [row[0] for row in result.fetchall()]
-                
-                for teacher_id in teacher_ids:
-                    # Check if teacher has other active programs
-                    result = await session.execute(text("""
-                        SELECT COUNT(*) FROM teacher_programs tp
-                        JOIN programs p ON tp.program_id = p.program_id
-                        WHERE tp.teacher_id = :teacher_id AND p.is_active = true AND p.program_id != :program_id
-                    """), {"teacher_id": teacher_id, "program_id": program_id})
-                    other_active_programs = result.scalar() or 0
-                    
-                    # Only deactivate teacher if they have no other active programs
-                    if other_active_programs == 0:
-                        await session.execute(text("""
-                            UPDATE teachers SET is_active = false WHERE teacher_id = :teacher_id
-                        """), {"teacher_id": teacher_id})
-                
-                # Also update MongoDB users
-                student_user_ids = await session.execute(text("""
-                    SELECT user_id FROM students WHERE program_id = :program_id
-                """), {"program_id": program_id})
-                for row in student_user_ids:
-                    await mongodb.db.users.update_one(
-                        {"user_id": str(row[0])},
-                        {"$set": {"status": "inactive"}}
-                    )
-                
-                teacher_user_ids = await session.execute(text("""
-                    SELECT user_id FROM teachers WHERE teacher_id = ANY(:teacher_ids)
-                """), {"teacher_ids": teacher_ids})
-                for row in teacher_user_ids:
-                    await mongodb.db.users.update_one(
-                        {"user_id": str(row[0])},
-                        {"$set": {"status": "inactive"}}
-                    )
+            # If program is being deactivated, cascade to students and teachers
+            if was_active and not is_active:
+                await cascade_program_deactivation(session, program_id)
             
             await session.commit()
         return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def cascade_program_deactivation(session, program_id: str):
+    """Deactivate all students and teachers associated with a program."""
+    # Deactivate students in this program
+    await session.execute(text(
+        "UPDATE students SET is_active = false WHERE program_id = :program_id"
+    ), {"program_id": program_id})
+    
+    # Get student user_ids to update in MongoDB
+    result = await session.execute(text(
+        "SELECT user_id FROM students WHERE program_id = :program_id"
+    ), {"program_id": program_id})
+    student_user_ids = [str(row[0]) for row in result.fetchall()]
+    
+    # Deactivate teachers linked to this program via teacher_programs junction table
+    result = await session.execute(text("""
+        SELECT DISTINCT t.teacher_id, t.user_id FROM teachers t
+        JOIN teacher_programs tp ON t.teacher_id = tp.teacher_id
+        WHERE tp.program_id = :program_id
+    """), {"program_id": program_id})
+    teacher_rows = result.fetchall()
+    
+    for teacher_row in teacher_rows:
+        teacher_id = str(teacher_row[0])
+        teacher_user_id = str(teacher_row[1])
+        
+        # Check if teacher has any OTHER active programs
+        other_prog_result = await session.execute(text("""
+            SELECT COUNT(*) FROM teacher_programs tp
+            JOIN programs p ON tp.program_id = p.program_id
+            WHERE tp.teacher_id = :teacher_id AND p.program_id != :program_id AND p.is_active = true
+        """), {"teacher_id": teacher_id, "program_id": program_id})
+        other_active_programs = other_prog_result.scalar() or 0
+        
+        # Only deactivate teacher if they have no other active programs
+        if other_active_programs == 0:
+            await session.execute(text(
+                "UPDATE teachers SET is_active = false WHERE teacher_id = :teacher_id"
+            ), {"teacher_id": teacher_id})
+            
+            # Update in MongoDB
+            if mongodb.db is not None:
+                await mongodb.db.users.update_one(
+                    {"user_id": teacher_user_id},
+                    {"$set": {"status": "inactive"}}
+                )
+    
+    # Update students in MongoDB
+    if mongodb.db is not None and student_user_ids:
+        await mongodb.db.users.update_many(
+            {"user_id": {"$in": student_user_ids}},
+            {"$set": {"status": "inactive"}}
+        )
+
+
+@router.post("/api/programs/{program_id}/deactivate")
+async def deactivate_program(program_id: str):
+    """Deactivate a program and cascade to associated students/teachers."""
+    try:
+        async with async_session_factory() as session:
+            # Check if program exists
+            result = await session.execute(text(
+                "SELECT name, is_active FROM programs WHERE program_id = :program_id"
+            ), {"program_id": program_id})
+            row = result.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Program not found")
+            
+            program_name = row[0]
+            is_already_inactive = not row[1]
+            
+            if is_already_inactive:
+                return {"success": True, "message": "Program is already inactive"}
+            
+            # Deactivate the program
+            await session.execute(text(
+                "UPDATE programs SET is_active = false, active = false WHERE program_id = :program_id"
+            ), {"program_id": program_id})
+            
+            # Cascade deactivation to students and teachers
+            await cascade_program_deactivation(session, program_id)
+            
+            await session.commit()
+        
+        return {"success": True, "message": f"Program '{program_name}' and associated users have been deactivated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/programs/check-expired")
+async def check_and_deactivate_expired_programs():
+    """Check for programs past their end_date and deactivate them with cascade."""
+    try:
+        from datetime import date as date_type
+        today = date_type.today()
+        deactivated_count = 0
+        
+        async with async_session_factory() as session:
+            # Find active programs that have passed their end_date
+            result = await session.execute(text("""
+                SELECT program_id, name FROM programs 
+                WHERE is_active = true AND end_date IS NOT NULL AND end_date < :today
+            """), {"today": today})
+            expired_programs = result.fetchall()
+            
+            for prog_row in expired_programs:
+                program_id = str(prog_row[0])
+                
+                # Deactivate the program
+                await session.execute(text(
+                    "UPDATE programs SET is_active = false, active = false WHERE program_id = :program_id"
+                ), {"program_id": program_id})
+                
+                # Cascade deactivation
+                await cascade_program_deactivation(session, program_id)
+                deactivated_count += 1
+            
+            await session.commit()
+        
+        return {
+            "success": True,
+            "deactivated_count": deactivated_count,
+            "message": f"Deactivated {deactivated_count} expired programs"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -757,87 +844,6 @@ async def delete_program(program_id: str):
         return {"success": True}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/api/programs/check-expired")
-async def check_expired_programs():
-    """Check and auto-deactivate programs that have exceeded their end date."""
-    try:
-        from datetime import date
-        today = date.today()
-        
-        async with async_session_factory() as session:
-            # Find active programs with end_date in the past
-            result = await session.execute(text("""
-                SELECT program_id FROM programs 
-                WHERE is_active = true AND end_date IS NOT NULL AND end_date < :today
-            """), {"today": today})
-            expired_program_ids = [row[0] for row in result.fetchall()]
-            
-            deactivated_count = 0
-            for program_id in expired_program_ids:
-                # Deactivate program
-                await session.execute(text("""
-                    UPDATE programs SET is_active = false, active = false 
-                    WHERE program_id = :program_id
-                """), {"program_id": str(program_id)})
-                
-                # Deactivate students
-                await session.execute(text("""
-                    UPDATE students SET is_active = false 
-                    WHERE program_id = :program_id AND is_active = true
-                """), {"program_id": str(program_id)})
-                
-                # Deactivate teachers (only if they have no other active programs)
-                result = await session.execute(text("""
-                    SELECT teacher_id FROM teacher_programs WHERE program_id = :program_id
-                """), {"program_id": str(program_id)})
-                teacher_ids = [row[0] for row in result.fetchall()]
-                
-                for teacher_id in teacher_ids:
-                    result = await session.execute(text("""
-                        SELECT COUNT(*) FROM teacher_programs tp
-                        JOIN programs p ON tp.program_id = p.program_id
-                        WHERE tp.teacher_id = :teacher_id AND p.is_active = true
-                    """), {"teacher_id": str(teacher_id)})
-                    other_active_programs = result.scalar() or 0
-                    
-                    if other_active_programs == 0:
-                        await session.execute(text("""
-                            UPDATE teachers SET is_active = false WHERE teacher_id = :teacher_id
-                        """), {"teacher_id": str(teacher_id)})
-                
-                # Update MongoDB users
-                student_user_ids = await session.execute(text("""
-                    SELECT user_id FROM students WHERE program_id = :program_id
-                """), {"program_id": str(program_id)})
-                for row in student_user_ids:
-                    await mongodb.db.users.update_one(
-                        {"user_id": str(row[0])},
-                        {"$set": {"status": "inactive"}}
-                    )
-                
-                if teacher_ids:
-                    teacher_user_ids = await session.execute(text("""
-                        SELECT user_id FROM teachers WHERE teacher_id = ANY(:teacher_ids)
-                    """), {"teacher_ids": [str(tid) for tid in teacher_ids]})
-                    for row in teacher_user_ids:
-                        await mongodb.db.users.update_one(
-                            {"user_id": str(row[0])},
-                            {"$set": {"status": "inactive"}}
-                        )
-                
-                deactivated_count += 1
-            
-            await session.commit()
-        
-        return {
-            "success": True, 
-            "deactivated_count": deactivated_count,
-            "program_ids": [str(pid) for pid in expired_program_ids]
-        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -672,7 +672,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                             </div>
                             <div class="overflow-x-auto">
                                 <table>
-                                    <thead><tr><th>Name</th><th>Cost Center</th><th>Default Allowance</th><th>Students</th><th>Teachers</th><th>Status</th><th>Actions</th></tr></thead>
+                                    <thead><tr><th>Name</th><th>Cost Center</th><th>Default Allowance</th><th>Duration</th><th>Students</th><th>Teachers</th><th>Status</th><th>Actions</th></tr></thead>
                                     <tbody id="programsTable"></tbody>
                                 </table>
                             </div>
@@ -697,6 +697,17 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                                 <div>
                                     <label class="block text-sm font-medium text-enterprise-700 mb-2">Default Daily Allowance (SAR)</label>
                                     <input type="number" name="default_daily_allowance" value="50" step="0.01" class="w-full">
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                    <div>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">Start Date</label>
+                                        <input type="date" name="start_date" class="w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-enterprise-700 mb-2">End Date</label>
+                                        <input type="date" name="end_date" class="w-full">
+                                        <p style="font-size: 11px; color: #64748b; margin-top: 4px;">Program auto-deactivates after this date</p>
+                                    </div>
                                 </div>
                                 <button type="submit" class="btn-primary">Create Program</button>
                             </form>
@@ -1030,6 +1041,8 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             await loadStats();
             await loadTrends();
             await loadPrograms();
+            // Check for expired programs on dashboard load
+            await checkExpiredPrograms();
         }
 
         async function loadHealth() {
@@ -1225,22 +1238,109 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 
                 const tbody = document.getElementById('programsTable');
                 if (tbody) {
-                    tbody.innerHTML = programs.map(p => `
+                    tbody.innerHTML = programs.map(p => {
+                        const startDate = p.start_date ? new Date(p.start_date).toLocaleDateString() : '-';
+                        const endDate = p.end_date ? new Date(p.end_date).toLocaleDateString() : '-';
+                        const durationText = p.start_date || p.end_date ? `${startDate} → ${endDate}` : 'No dates set';
+                        const isExpired = p.end_date && new Date(p.end_date) < new Date();
+                        
+                        return `
                         <tr>
                             <td class="font-medium">${p.name}</td>
                             <td class="mono text-enterprise-500">${p.cost_center}</td>
                             <td>${p.default_daily_allowance} SAR</td>
+                            <td style="font-size: 12px;">
+                                ${durationText}
+                                ${isExpired && p.is_active ? '<span class="badge badge-danger" style="margin-left: 6px;">Expired</span>' : ''}
+                            </td>
                             <td>${p.student_count}</td>
                             <td>${p.teacher_count}</td>
                             <td><span class="badge ${p.is_active ? 'badge-success' : 'badge-danger'}">${p.is_active ? 'Active' : 'Inactive'}</span></td>
                             <td>
+                                ${p.is_active ? `<button onclick="deactivateProgram('${p.program_id}', '${p.name}')" class="action-link action-link-primary">Deactivate</button><span class="text-enterprise-300 mx-2">|</span>` : ''}
+                                <button onclick="editProgram('${p.program_id}')" class="action-link action-link-primary">Edit</button>
+                                <span class="text-enterprise-300 mx-2">|</span>
                                 <button onclick="deleteProgram('${p.program_id}')" class="action-link action-link-danger">Delete</button>
                             </td>
                         </tr>
-                    `).join('');
+                    `}).join('');
                 }
             } catch (e) {
                 console.error('Load programs failed:', e);
+            }
+        }
+        
+        async function deactivateProgram(programId, programName) {
+            if (!confirm(`Are you sure you want to deactivate "${programName}"?\n\nThis will also deactivate all students and teachers associated with this program.`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/programs/${programId}/deactivate`, { method: 'POST' });
+                const result = await res.json();
+                if (res.ok) {
+                    showToast(result.message || 'Program deactivated successfully', 'success');
+                    loadPrograms();
+                    loadStudents();
+                    loadTeachers();
+                } else {
+                    showToast(result.detail || 'Failed to deactivate program', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to deactivate program', 'error');
+            }
+        }
+        
+        async function editProgram(programId) {
+            const program = programs.find(p => p.program_id === programId);
+            if (!program) return;
+            
+            const newName = prompt('Program Name:', program.name);
+            if (newName === null) return;
+            
+            const newCostCenter = prompt('Cost Center Code:', program.cost_center);
+            if (newCostCenter === null) return;
+            
+            const newAllowance = prompt('Default Daily Allowance (SAR):', program.default_daily_allowance);
+            if (newAllowance === null) return;
+            
+            const newStartDate = prompt('Start Date (YYYY-MM-DD):', program.start_date || '');
+            const newEndDate = prompt('End Date (YYYY-MM-DD):', program.end_date || '');
+            
+            try {
+                const res = await fetch(`${API_BASE}/programs/${programId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: newName,
+                        cost_center: newCostCenter,
+                        default_daily_allowance: parseFloat(newAllowance),
+                        start_date: newStartDate || null,
+                        end_date: newEndDate || null,
+                        is_active: program.is_active
+                    })
+                });
+                if (res.ok) {
+                    showToast('Program updated successfully', 'success');
+                    loadPrograms();
+                } else {
+                    const result = await res.json();
+                    showToast(result.detail || 'Failed to update program', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to update program', 'error');
+            }
+        }
+        
+        async function checkExpiredPrograms() {
+            try {
+                const res = await fetch(`${API_BASE}/programs/check-expired`, { method: 'POST' });
+                const result = await res.json();
+                if (res.ok && result.deactivated_count > 0) {
+                    showToast(result.message, 'success');
+                    loadPrograms();
+                    loadStudents();
+                    loadTeachers();
+                }
+            } catch (e) {
+                console.error('Check expired programs failed:', e);
             }
         }
 
