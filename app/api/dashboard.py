@@ -628,8 +628,20 @@ async def create_program(data: dict):
     try:
         program_id = str(uuid.uuid4())
         cost_center = data.get("cost_center", data.get("cost_center_code", "GEN-001"))
-        start_date = data.get("start_date") or None
-        end_date = data.get("end_date") or None
+        
+        # Handle empty strings for dates - convert to None
+        start_date = data.get("start_date")
+        if start_date == "" or start_date is None:
+            start_date = None
+        end_date = data.get("end_date")
+        if end_date == "" or end_date is None:
+            end_date = None
+        
+        # Get default_daily_allowance with proper type conversion
+        try:
+            default_allowance = float(data.get("default_daily_allowance", 50.0))
+        except (ValueError, TypeError):
+            default_allowance = 50.0
         
         async with async_session_factory() as session:
             await session.execute(text("""
@@ -640,14 +652,19 @@ async def create_program(data: dict):
                 "name": data["name"],
                 "cost_center_code": cost_center,
                 "cost_center": cost_center,
-                "default_daily_allowance": float(data.get("default_daily_allowance", 50.0)),
+                "default_daily_allowance": default_allowance,
                 "start_date": start_date,
                 "end_date": end_date
             })
             await session.commit()
         
         return {"success": True, "program_id": program_id}
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Missing required field: {str(e)}")
     except Exception as e:
+        import traceback
+        print(f"Error creating program: {e}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 

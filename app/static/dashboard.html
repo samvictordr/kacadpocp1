@@ -1710,14 +1710,19 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
+                const result = await res.json();
                 if (res.ok) {
                     showToast('Program created successfully!', 'success');
                     e.target.reset();
                     loadPrograms();
                     loadProgramSelects();
+                } else {
+                    showToast('Error: ' + (result.detail || 'Failed to create program'), 'error');
+                    console.error('Create program failed:', result);
                 }
-            } catch (e) {
-                showToast('Error: ' + e.message, 'error');
+            } catch (err) {
+                showToast('Error: ' + err.message, 'error');
+                console.error('Create program exception:', err);
             }
         }
 
