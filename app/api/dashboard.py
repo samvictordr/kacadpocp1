@@ -1243,7 +1243,9 @@ async def bulk_upload_students(
             raise HTTPException(status_code=503, detail="MongoDB not connected")
             
         content = await file.read()
-        reader = csv.DictReader(io.StringIO(content.decode('utf-8')))
+        # Decode and remove BOM if present
+        decoded_content = content.decode('utf-8-sig')  # utf-8-sig handles BOM automatically
+        reader = csv.DictReader(io.StringIO(decoded_content))
         
         created, errors = 0, []
         
@@ -1327,7 +1329,9 @@ async def bulk_upload_teachers(file: UploadFile = File(...), program_id: str = F
             raise HTTPException(status_code=503, detail="MongoDB not connected")
             
         content = await file.read()
-        reader = csv.DictReader(io.StringIO(content.decode('utf-8')))
+        # Decode and remove BOM if present
+        decoded_content = content.decode('utf-8-sig')  # utf-8-sig handles BOM automatically
+        reader = csv.DictReader(io.StringIO(decoded_content))
         
         created, errors = 0, []
         
