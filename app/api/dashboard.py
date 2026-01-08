@@ -625,16 +625,22 @@ async def delete_user(user_id: str):
 @router.post("/api/programs")
 async def create_program(data: dict):
     """Create a program."""
+    from datetime import datetime
     try:
         program_id = str(uuid.uuid4())
         cost_center = data.get("cost_center", data.get("cost_center_code", "GEN-001"))
         
-        # Handle empty strings for dates - convert to None
+        # Handle empty strings for dates - convert to Python date objects
         start_date = data.get("start_date")
-        if start_date == "" or start_date is None:
+        if start_date and start_date.strip():
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        else:
             start_date = None
+            
         end_date = data.get("end_date")
-        if end_date == "" or end_date is None:
+        if end_date and end_date.strip():
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        else:
             end_date = None
         
         # Get default_daily_allowance with proper type conversion
@@ -671,11 +677,29 @@ async def create_program(data: dict):
 @router.put("/api/programs/{program_id}")
 async def update_program(program_id: str, data: dict):
     """Update a program."""
+    from datetime import datetime
     try:
         cost_center = data.get("cost_center", data.get("cost_center_code", "GEN-001"))
         is_active = data.get("is_active", True)
-        start_date = data.get("start_date") or None
-        end_date = data.get("end_date") or None
+        
+        # Handle empty strings for dates - convert to Python date objects
+        start_date = data.get("start_date")
+        if start_date and start_date.strip():
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        else:
+            start_date = None
+            
+        end_date = data.get("end_date")
+        if end_date and end_date.strip():
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        else:
+            end_date = None
+        
+        # Get default_daily_allowance with proper type conversion
+        try:
+            default_allowance = float(data.get("default_daily_allowance", 50.0))
+        except (ValueError, TypeError):
+            default_allowance = 50.0
         
         async with async_session_factory() as session:
             # Get current program active state to check if deactivating
@@ -694,7 +718,7 @@ async def update_program(program_id: str, data: dict):
                 "name": data["name"],
                 "cost_center": cost_center,
                 "cost_center_code": cost_center,
-                "default_daily_allowance": float(data.get("default_daily_allowance", 50.0)),
+                "default_daily_allowance": default_allowance,
                 "is_active": is_active,
                 "active": is_active,
                 "start_date": start_date,
