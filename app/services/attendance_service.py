@@ -247,6 +247,7 @@ class AttendanceService:
         record = AttendanceRecord(
             session_id=session.session_id,
             student_id=UUID(student_id),
+            scanned_by=UUID(teacher_user_id),
             status=AttendanceStatus.PRESENT
         )
         

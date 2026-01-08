@@ -168,6 +168,10 @@
                     <i class="fa-solid fa-sitemap" style="width: 20px; color: #94a3b8;"></i>
                     <span style="margin-left: 12px; font-size: 14px; font-weight: 500;">Programs</span>
                 </div>
+                <div class="sidebar-item" data-page="attendance">
+                    <i class="fa-solid fa-clipboard-check" style="width: 20px; color: #94a3b8;"></i>
+                    <span style="margin-left: 12px; font-size: 14px; font-weight: 500;">Attendance</span>
+                </div>
                 <div class="sidebar-item" data-page="telemetry">
                     <i class="fa-solid fa-chart-line" style="width: 20px; color: #94a3b8;"></i>
                     <span style="margin-left: 12px; font-size: 14px; font-weight: 500;">Telemetry</span>
@@ -770,6 +774,113 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     </div>
                 </div>
 
+                <!-- Attendance Page -->
+                <div id="page-attendance" class="page-content hidden">
+                    <div class="card p-6 mb-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+                                    <i class="fa-solid fa-clipboard-check text-purple-600"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-enterprise-900">Attendance Records</h3>
+                                    <p class="text-sm text-enterprise-500">View all attendance data across programs</p>
+                                </div>
+                            </div>
+                            <button onclick="loadAttendanceRecords()" class="btn-secondary" style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-rotate-right" style="font-size: 12px;"></i> Refresh
+                            </button>
+                        </div>
+                        
+                        <!-- Filters -->
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px;">
+                            <div>
+                                <label class="block text-sm font-medium text-enterprise-700 mb-2">Program</label>
+                                <select id="attendanceFilterProgram" onchange="loadAttendanceRecords()" class="w-full">
+                                    <option value="">All Programs</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-enterprise-700 mb-2">Class</label>
+                                <select id="attendanceFilterClass" onchange="loadAttendanceRecords()" class="w-full">
+                                    <option value="">All Classes</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-enterprise-700 mb-2">From Date</label>
+                                <input type="date" id="attendanceFilterDateFrom" onchange="loadAttendanceRecords()" class="w-full">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-enterprise-700 mb-2">To Date</label>
+                                <input type="date" id="attendanceFilterDateTo" onchange="loadAttendanceRecords()" class="w-full">
+                            </div>
+                        </div>
+                        
+                        <!-- Summary Stats -->
+                        <div id="attendanceSummaryStats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
+                            <div class="card p-4 text-center" style="background: #f0fdf4;">
+                                <div class="text-2xl font-bold text-green-600" id="attendanceTotalRecords">-</div>
+                                <div class="text-sm text-enterprise-500">Total Records</div>
+                            </div>
+                            <div class="card p-4 text-center" style="background: #eff6ff;">
+                                <div class="text-2xl font-bold text-blue-600" id="attendanceUniqueStudents">-</div>
+                                <div class="text-sm text-enterprise-500">Unique Students</div>
+                            </div>
+                            <div class="card p-4 text-center" style="background: #faf5ff;">
+                                <div class="text-2xl font-bold text-purple-600" id="attendanceUniqueDates">-</div>
+                                <div class="text-sm text-enterprise-500">Days with Attendance</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Attendance Table -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr>
+                                        <th class="text-left py-3 px-4">Student</th>
+                                        <th class="text-left py-3 px-4">Class</th>
+                                        <th class="text-left py-3 px-4">Program</th>
+                                        <th class="text-left py-3 px-4">Date</th>
+                                        <th class="text-left py-3 px-4">Scanned At</th>
+                                        <th class="text-left py-3 px-4">Scanned By</th>
+                                        <th class="text-left py-3 px-4">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendanceTable">
+                                    <tr><td colspan="7" class="text-center py-8 text-enterprise-400">Loading attendance records...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Attendance Summary by Class -->
+                    <div class="card p-6">
+                        <div class="flex items-center gap-3 mb-5">
+                            <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                                <i class="fa-solid fa-chart-pie text-blue-600"></i>
+                            </div>
+                            <h3 class="font-semibold text-enterprise-900">Attendance Summary by Class</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr>
+                                        <th class="text-left py-3 px-4">Class</th>
+                                        <th class="text-left py-3 px-4">Program</th>
+                                        <th class="text-left py-3 px-4">Date</th>
+                                        <th class="text-left py-3 px-4">Present</th>
+                                        <th class="text-left py-3 px-4">Enrolled</th>
+                                        <th class="text-left py-3 px-4">Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendanceSummaryTable">
+                                    <tr><td colspan="6" class="text-center py-8 text-enterprise-400">Loading summary...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Telemetry Page -->
                 <div id="page-telemetry" class="page-content hidden">
                     <!-- PostgreSQL - Wide card at top -->
@@ -1032,6 +1143,14 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                     loadTeachers().then(() => loadClassFormSelects());
                 });
                 loadClasses();
+            }
+            if (page === 'attendance') { 
+                loadPrograms().then(() => {
+                    loadClasses().then(() => {
+                        populateAttendanceFilters();
+                        loadAttendanceRecords();
+                    });
+                });
             }
             if (page === 'telemetry') { loadTelemetry(); }
         }
@@ -1388,6 +1507,107 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 `).join('') || '<tr><td colspan="6" class="text-center text-enterprise-500 py-8">No allowances found for the selected criteria</td></tr>';
             } catch (e) {
                 showToast('Failed to load allowances', 'error');
+            }
+        }
+
+        // ===== ATTENDANCE MANAGEMENT =====
+        async function loadAttendanceRecords() {
+            try {
+                const programId = document.getElementById('attendanceFilterProgram').value;
+                const classId = document.getElementById('attendanceFilterClass').value;
+                const dateFrom = document.getElementById('attendanceFilterDateFrom').value;
+                const dateTo = document.getElementById('attendanceFilterDateTo').value;
+                
+                let url = `${API_BASE}/attendance?`;
+                if (programId) url += `program_id=${programId}&`;
+                if (classId) url += `class_id=${classId}&`;
+                if (dateFrom) url += `date_from=${dateFrom}&`;
+                if (dateTo) url += `date_to=${dateTo}&`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                const tbody = document.getElementById('attendanceTable');
+                if (data.records && data.records.length > 0) {
+                    tbody.innerHTML = data.records.map(r => `
+                        <tr>
+                            <td class="font-medium">${r.student_name}</td>
+                            <td>${r.class_name}</td>
+                            <td>${r.program_name}</td>
+                            <td>${r.attendance_date}</td>
+                            <td style="font-size: 12px;">${new Date(r.scanned_at).toLocaleString()}</td>
+                            <td>${r.teacher_name}</td>
+                            <td><span class="badge badge-success">${r.status}</span></td>
+                        </tr>
+                    `).join('');
+                    
+                    // Update stats
+                    document.getElementById('attendanceTotalRecords').textContent = data.records.length;
+                    const uniqueStudents = new Set(data.records.map(r => r.student_id)).size;
+                    document.getElementById('attendanceUniqueStudents').textContent = uniqueStudents;
+                    const uniqueDates = new Set(data.records.map(r => r.attendance_date)).size;
+                    document.getElementById('attendanceUniqueDates').textContent = uniqueDates;
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-enterprise-400">No attendance records found</td></tr>';
+                    document.getElementById('attendanceTotalRecords').textContent = '0';
+                    document.getElementById('attendanceUniqueStudents').textContent = '0';
+                    document.getElementById('attendanceUniqueDates').textContent = '0';
+                }
+                
+                // Load summary
+                loadAttendanceSummary(programId);
+                
+            } catch (e) {
+                console.error('Load attendance failed:', e);
+                showToast('Failed to load attendance records', 'error');
+            }
+        }
+        
+        async function loadAttendanceSummary(programId = '') {
+            try {
+                let url = `${API_BASE}/attendance/summary`;
+                if (programId) url += `?program_id=${programId}`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                const tbody = document.getElementById('attendanceSummaryTable');
+                if (data.summary && data.summary.length > 0) {
+                    tbody.innerHTML = data.summary.map(s => `
+                        <tr>
+                            <td class="font-medium">${s.class_name}</td>
+                            <td>${s.program_name}</td>
+                            <td>${s.date}</td>
+                            <td class="text-green-600 font-semibold">${s.present_count}</td>
+                            <td>${s.enrolled_count}</td>
+                            <td>
+                                <span class="badge ${s.attendance_rate >= 80 ? 'badge-success' : s.attendance_rate >= 50 ? 'badge-warning' : 'badge-danger'}">
+                                    ${s.attendance_rate}%
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-enterprise-400">No attendance data available</td></tr>';
+                }
+            } catch (e) {
+                console.error('Load attendance summary failed:', e);
+            }
+        }
+        
+        function populateAttendanceFilters() {
+            // Populate program filter
+            const programSelect = document.getElementById('attendanceFilterProgram');
+            if (programSelect && programs.length > 0) {
+                programSelect.innerHTML = '<option value="">All Programs</option>' + 
+                    programs.map(p => `<option value="${p.program_id}">${p.name}</option>`).join('');
+            }
+            
+            // Populate class filter
+            const classSelect = document.getElementById('attendanceFilterClass');
+            if (classSelect && classes.length > 0) {
+                classSelect.innerHTML = '<option value="">All Classes</option>' + 
+                    classes.map(c => `<option value="${c.class_id}">${c.name}</option>`).join('');
             }
         }
 

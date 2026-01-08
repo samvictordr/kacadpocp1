@@ -182,6 +182,7 @@ class AttendanceRecord(Base):
     record_id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id = Column(PGUUID(as_uuid=True), ForeignKey("attendance_sessions.session_id"), nullable=False)
     student_id = Column(PGUUID(as_uuid=True), ForeignKey("students.student_id"), nullable=False)
+    scanned_by = Column(PGUUID(as_uuid=True), nullable=True)  # Teacher user_id who scanned
     status = Column(
         SQLEnum(AttendanceStatus, name='attendance_status', create_type=False,
                 values_callable=lambda x: [e.value for e in x]),

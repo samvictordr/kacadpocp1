@@ -1,6 +1,7 @@
 """
 Teacher API endpoints.
 """
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -182,3 +183,124 @@ async def get_balance(
         )
     
     return TeacherBalanceResponse(**balance)
+
+@router.get("/attendance/history")
+async def get_attendance_history(
+    class_id: Optional[str] = None,
+    date: Optional[str] = None,
+    current_user: TokenPayload = Depends(require_teacher),
+    pg: AsyncSession = Depends(get_postgres_session)
+):
+    """
+    Get attendance history for teacher's classes.
+    Can filter by class_id and/or date (YYYY-MM-DD format).
+    """
+    from sqlalchemy import text
+    
+    # Build query based on filters
+    query = """
+        SELECT 
+            ar.record_id,
+            ar.scanned_at,
+            ar.status,
+            s.full_name as student_name,
+            s.student_id,
+            c.name as class_name,
+            c.class_id,
+            asess.date as attendance_date,
+            asess.session_id
+        FROM attendance_records ar
+        JOIN attendance_sessions asess ON ar.session_id = asess.session_id
+        JOIN students s ON ar.student_id = s.student_id
+        JOIN classes c ON asess.class_id = c.class_id
+        WHERE c.teacher_id = :teacher_id
+    """
+    params = {"teacher_id": current_user.user_id}
+    
+    if class_id:
+        query += " AND c.class_id = :class_id"
+        params["class_id"] = class_id
+    
+    if date:
+        query += " AND asess.date = :date"
+        params["date"] = date
+    
+    query += " ORDER BY ar.scanned_at DESC LIMIT 200"
+    
+    result = await pg.execute(text(query), params)
+    records = result.fetchall()
+    
+    return {
+        "records": [
+            {
+                "record_id": str(r[0]),
+                "scanned_at": r[1].isoformat() if r[1] else None,
+                "status": r[2],
+                "student_name": r[3],
+                "student_id": str(r[4]),
+                "class_name": r[5],
+                "class_id": str(r[6]),
+                "attendance_date": str(r[7]),
+                "session_id": str(r[8])
+            }
+            for r in records
+        ]
+    }
+
+
+@router.get("/attendance/session/{session_id}")
+async def get_session_attendance(
+    session_id: str,
+    current_user: TokenPayload = Depends(require_teacher),
+    pg: AsyncSession = Depends(get_postgres_session)
+):
+    """
+    Get all attendance records for a specific session.
+    """
+    from sqlalchemy import text
+    
+    # Verify teacher owns this session
+    result = await pg.execute(text("""
+        SELECT asess.session_id, asess.date, c.name as class_name, c.class_id
+        FROM attendance_sessions asess
+        JOIN classes c ON asess.class_id = c.class_id
+        WHERE asess.session_id = :session_id AND c.teacher_id = :teacher_id
+    """), {"session_id": session_id, "teacher_id": current_user.user_id})
+    
+    session_info = result.fetchone()
+    if not session_info:
+        raise HTTPException(status_code=404, detail="Session not found or not authorized")
+    
+    # Get records
+    result = await pg.execute(text("""
+        SELECT 
+            ar.record_id,
+            ar.scanned_at,
+            ar.status,
+            s.full_name as student_name,
+            s.student_id
+        FROM attendance_records ar
+        JOIN students s ON ar.student_id = s.student_id
+        WHERE ar.session_id = :session_id
+        ORDER BY ar.scanned_at ASC
+    """), {"session_id": session_id})
+    
+    records = result.fetchall()
+    
+    return {
+        "session_id": str(session_info[0]),
+        "date": str(session_info[1]),
+        "class_name": session_info[2],
+        "class_id": str(session_info[3]),
+        "records": [
+            {
+                "record_id": str(r[0]),
+                "scanned_at": r[1].isoformat() if r[1] else None,
+                "status": r[2],
+                "student_name": r[3],
+                "student_id": str(r[4])
+            }
+            for r in records
+        ],
+        "total_present": len(records)
+    }

@@ -1229,6 +1229,150 @@ async def add_supplement(data: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== ATTENDANCE MANAGEMENT ====================
+
+@router.get("/api/attendance")
+async def get_all_attendance(
+    program_id: Optional[str] = None,
+    class_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None
+):
+    """Get all attendance records with optional filters."""
+    try:
+        query = """
+            SELECT 
+                ar.record_id,
+                ar.scanned_at,
+                ar.status,
+                ar.scanned_by,
+                s.full_name as student_name,
+                s.student_id,
+                c.name as class_name,
+                c.class_id,
+                p.name as program_name,
+                p.program_id,
+                asess.date as attendance_date,
+                asess.session_id,
+                asess.created_by as teacher_user_id
+            FROM attendance_records ar
+            JOIN attendance_sessions asess ON ar.session_id = asess.session_id
+            JOIN students s ON ar.student_id = s.student_id
+            JOIN classes c ON asess.class_id = c.class_id
+            JOIN programs p ON c.program_id = p.program_id
+            WHERE 1=1
+        """
+        params = {}
+        
+        if program_id:
+            query += " AND p.program_id = :program_id"
+            params["program_id"] = program_id
+        
+        if class_id:
+            query += " AND c.class_id = :class_id"
+            params["class_id"] = class_id
+        
+        if date_from:
+            query += " AND asess.date >= :date_from"
+            params["date_from"] = date_from
+        
+        if date_to:
+            query += " AND asess.date <= :date_to"
+            params["date_to"] = date_to
+        
+        query += " ORDER BY ar.scanned_at DESC LIMIT 500"
+        
+        async with async_session_factory() as session:
+            result = await session.execute(text(query), params)
+            records = result.fetchall()
+            
+            # Get teacher names
+            teacher_ids = list(set([str(r[12]) for r in records if r[12]]))
+            teacher_names = {}
+            
+            if teacher_ids and mongodb.db is not None:
+                teachers = await mongodb.db.users.find(
+                    {"user_id": {"$in": teacher_ids}}
+                ).to_list(length=100)
+                teacher_names = {t["user_id"]: t.get("full_name", t.get("name", "Unknown")) for t in teachers}
+        
+        return {
+            "records": [
+                {
+                    "record_id": str(r[0]),
+                    "scanned_at": r[1].isoformat() if r[1] else None,
+                    "status": r[2],
+                    "scanned_by": str(r[3]) if r[3] else None,
+                    "student_name": r[4],
+                    "student_id": str(r[5]),
+                    "class_name": r[6],
+                    "class_id": str(r[7]),
+                    "program_name": r[8],
+                    "program_id": str(r[9]),
+                    "attendance_date": str(r[10]),
+                    "session_id": str(r[11]),
+                    "teacher_name": teacher_names.get(str(r[12]), "Unknown") if r[12] else "Unknown"
+                }
+                for r in records
+            ],
+            "total": len(records)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/attendance/summary")
+async def get_attendance_summary(program_id: Optional[str] = None):
+    """Get attendance summary by class and date."""
+    try:
+        query = """
+            SELECT 
+                c.class_id,
+                c.name as class_name,
+                p.name as program_name,
+                asess.date as attendance_date,
+                COUNT(ar.record_id) as present_count,
+                (SELECT COUNT(*) FROM class_enrollments ce WHERE ce.class_id = c.class_id) as enrolled_count
+            FROM classes c
+            JOIN programs p ON c.program_id = p.program_id
+            LEFT JOIN attendance_sessions asess ON c.class_id = asess.class_id
+            LEFT JOIN attendance_records ar ON asess.session_id = ar.session_id
+            WHERE asess.date IS NOT NULL
+        """
+        params = {}
+        
+        if program_id:
+            query += " AND p.program_id = :program_id"
+            params["program_id"] = program_id
+        
+        query += """
+            GROUP BY c.class_id, c.name, p.name, asess.date
+            ORDER BY asess.date DESC, c.name
+            LIMIT 100
+        """
+        
+        async with async_session_factory() as session:
+            result = await session.execute(text(query), params)
+            rows = result.fetchall()
+        
+        return {
+            "summary": [
+                {
+                    "class_id": str(r[0]),
+                    "class_name": r[1],
+                    "program_name": r[2],
+                    "date": str(r[3]),
+                    "present_count": r[4],
+                    "enrolled_count": r[5],
+                    "attendance_rate": round((r[4] / r[5] * 100) if r[5] > 0 else 0, 1)
+                }
+                for r in rows
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== BULK UPLOAD ====================
 
 @router.post("/api/bulk/students")
