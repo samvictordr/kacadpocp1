@@ -1627,47 +1627,59 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 if (date) url += `&filter_date=${date}`;
                 
                 const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 
                 // Also load teachers for the select dropdowns
                 loadTeacherSelectsForAllowance();
                 
                 const tbody = document.getElementById('teacherAllowancesTable');
-                tbody.innerHTML = data.map(a => `
-                    <tr>
-                        <td class="font-medium">${a.full_name}</td>
-                        <td>${a.program_name || 'N/A'}</td>
-                        <td>${a.date}</td>
-                        <td>${a.base_amount} SAR</td>
-                        <td>${a.bonus_amount} SAR</td>
-                        <td class="font-semibold text-enterprise-900">${a.total_amount} SAR</td>
-                        <td>
-                            <button onclick="resetSingleTeacherAllowance('${a.teacher_id}')" class="btn-secondary btn-sm" title="Reset to default">
-                                <i class="fa-solid fa-rotate"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `).join('') || '<tr><td colspan="7" class="text-center text-enterprise-500 py-8">No teacher allowances found</td></tr>';
+                if (Array.isArray(data) && data.length > 0) {
+                    tbody.innerHTML = data.map(a => `
+                        <tr>
+                            <td class="font-medium">${a.full_name}</td>
+                            <td>${a.program_name || 'N/A'}</td>
+                            <td>${a.date}</td>
+                            <td>${a.base_amount} SAR</td>
+                            <td>${a.bonus_amount} SAR</td>
+                            <td class="font-semibold text-enterprise-900">${a.total_amount} SAR</td>
+                            <td>
+                                <button onclick="resetSingleTeacherAllowance('${a.teacher_id}')" class="btn-secondary btn-sm" title="Reset to default">
+                                    <i class="fa-solid fa-rotate"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-enterprise-500 py-8">No teacher allowances found. Run daily reset first.</td></tr>';
+                }
             } catch (e) {
                 console.error('Load teacher allowances failed:', e);
-                showToast('Failed to load teacher allowances', 'error');
+                showToast('Failed to load teacher allowances: ' + e.message, 'error');
             }
         }
         
         async function loadTeacherSelectsForAllowance() {
-            // Load teachers from the backend for the allowance selects
+            // Load teachers from the PostgreSQL teachers table (has teacher_id)
             try {
-                const res = await fetch(`${API_BASE}/users?role=teacher`);
-                const data = await res.json();
-                const teachersList = data.users || [];
+                const res = await fetch(`${API_BASE}/teachers`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const teachersList = await res.json();
                 
-                const options = teachersList.map(t => `<option value="${t.teacher_id || t.user_id}">${t.full_name}</option>`).join('');
-                const optionsHtml = '<option value="">Select Teacher</option>' + options;
-                
-                document.getElementById('teacherAllowanceSelect').innerHTML = optionsHtml;
-                document.getElementById('teacherBumpSelect').innerHTML = optionsHtml;
+                if (Array.isArray(teachersList) && teachersList.length > 0) {
+                    const options = teachersList.map(t => `<option value="${t.teacher_id}">${t.full_name} (${t.program_name || 'No program'})</option>`).join('');
+                    const optionsHtml = '<option value="">Select Teacher</option>' + options;
+                    
+                    document.getElementById('teacherAllowanceSelect').innerHTML = optionsHtml;
+                    document.getElementById('teacherBumpSelect').innerHTML = optionsHtml;
+                } else {
+                    const emptyHtml = '<option value="">No teachers found</option>';
+                    document.getElementById('teacherAllowanceSelect').innerHTML = emptyHtml;
+                    document.getElementById('teacherBumpSelect').innerHTML = emptyHtml;
+                }
             } catch (e) {
                 console.error('Failed to load teachers for allowance:', e);
+                showToast('Failed to load teachers: ' + e.message, 'error');
             }
         }
         
