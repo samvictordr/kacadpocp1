@@ -1901,7 +1901,8 @@ async def cron_status():
     from datetime import date
     
     try:
-        today = str(date.today())
+        today = date.today()
+        today_str = str(today)
         async with async_session_factory() as session:
             # Check if any allowances were reset today
             result = await session.execute(text("""
@@ -1915,12 +1916,14 @@ async def cron_status():
             teacher_count = result.scalar() or 0
             
             return {
-                "date": today,
+                "date": today_str,
                 "student_allowances_set": student_count,
                 "teacher_allowances_set": teacher_count,
                 "status": "ok" if (student_count > 0 or teacher_count > 0) else "not_run"
             }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return {"date": str(date.today()), "status": "error", "error": str(e)}
 
 
