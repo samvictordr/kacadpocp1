@@ -989,19 +989,30 @@ async def delete_class(class_id: str):
 @router.get("/api/allowances")
 async def get_allowances(filter_date: Optional[str] = None, user_type: Optional[str] = None):
     """Get allowances for students and/or teachers."""
+    from datetime import datetime as dt
+    
     try:
         results = []
+        
+        # Convert filter_date string to date object if provided
+        date_filter = None
+        if filter_date:
+            try:
+                date_filter = dt.strptime(filter_date, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        
         async with async_session_factory() as session:
             # Get student allowances (unless user_type is 'teacher')
             if user_type != 'teacher':
-                if filter_date:
+                if date_filter:
                     result = await session.execute(text("""
                         SELECT da.allowance_id, da.student_id as user_id, da.date, da.base_amount, 
                                da.bonus_amount, da.total_amount, s.full_name, 'student' as user_type
                         FROM daily_allowances da
                         JOIN students s ON da.student_id = s.student_id
                         WHERE da.date = :filter_date ORDER BY s.full_name
-                    """), {"filter_date": filter_date})
+                    """), {"filter_date": date_filter})
                 else:
                     result = await session.execute(text("""
                         SELECT da.allowance_id, da.student_id as user_id, da.date, da.base_amount, 
@@ -1012,11 +1023,20 @@ async def get_allowances(filter_date: Optional[str] = None, user_type: Optional[
                     """))
                 rows = result.fetchall()
                 columns = ["allowance_id", "user_id", "date", "base_amount", "bonus_amount", "total_amount", "full_name", "user_type"]
-                results.extend([dict(zip(columns, row)) for row in rows])
+                for row in rows:
+                    row_dict = dict(zip(columns, row))
+                    # Convert date to string for JSON serialization
+                    row_dict["date"] = str(row_dict["date"])
+                    row_dict["allowance_id"] = str(row_dict["allowance_id"])
+                    row_dict["user_id"] = str(row_dict["user_id"])
+                    row_dict["base_amount"] = float(row_dict["base_amount"])
+                    row_dict["bonus_amount"] = float(row_dict["bonus_amount"])
+                    row_dict["total_amount"] = float(row_dict["total_amount"])
+                    results.append(row_dict)
             
             # Get teacher allowances (unless user_type is 'student')
             if user_type != 'student':
-                if filter_date:
+                if date_filter:
                     result = await session.execute(text("""
                         SELECT tda.allowance_id, tda.teacher_id as user_id, tda.teacher_id, tda.date, tda.base_amount, 
                                tda.bonus_amount, tda.total_amount, t.full_name, 'teacher' as user_type,
@@ -1025,7 +1045,7 @@ async def get_allowances(filter_date: Optional[str] = None, user_type: Optional[
                         JOIN teachers t ON tda.teacher_id = t.teacher_id
                         LEFT JOIN programs p ON t.program_id = p.program_id
                         WHERE tda.date = :filter_date ORDER BY t.full_name
-                    """), {"filter_date": filter_date})
+                    """), {"filter_date": date_filter})
                 else:
                     result = await session.execute(text("""
                         SELECT tda.allowance_id, tda.teacher_id as user_id, tda.teacher_id, tda.date, tda.base_amount, 
@@ -1038,12 +1058,26 @@ async def get_allowances(filter_date: Optional[str] = None, user_type: Optional[
                     """))
                 rows = result.fetchall()
                 columns = ["allowance_id", "user_id", "teacher_id", "date", "base_amount", "bonus_amount", "total_amount", "full_name", "user_type", "program_name"]
-                results.extend([dict(zip(columns, row)) for row in rows])
+                for row in rows:
+                    row_dict = dict(zip(columns, row))
+                    # Convert types for JSON serialization
+                    row_dict["date"] = str(row_dict["date"])
+                    row_dict["allowance_id"] = str(row_dict["allowance_id"])
+                    row_dict["user_id"] = str(row_dict["user_id"])
+                    row_dict["teacher_id"] = str(row_dict["teacher_id"])
+                    row_dict["base_amount"] = float(row_dict["base_amount"])
+                    row_dict["bonus_amount"] = float(row_dict["bonus_amount"])
+                    row_dict["total_amount"] = float(row_dict["total_amount"])
+                    results.append(row_dict)
             
             # Sort combined results by date desc, then name
-            results.sort(key=lambda x: (str(x['date']), x['full_name']), reverse=True)
+            results.sort(key=lambda x: (x['date'], x['full_name']), reverse=True)
             return results[:100]  # Limit to 100 total
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
