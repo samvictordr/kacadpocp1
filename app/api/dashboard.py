@@ -1686,3 +1686,173 @@ async def cron_status():
             }
     except Exception as e:
         return {"date": str(date.today()), "status": "error", "error": str(e)}
+
+
+# ==================== TEACHER ALLOWANCE MANAGEMENT ====================
+
+@router.post("/api/teacher-allowance/reset")
+async def reset_teacher_allowance(teacher_id: str = None, base_amount: float = None):
+    """Reset allowance for a single teacher or all teachers."""
+    from decimal import Decimal
+    from datetime import date, datetime, timezone
+    
+    try:
+        today = date.today()
+        async with async_session_factory() as session:
+            if teacher_id:
+                # Reset single teacher
+                # Get the teacher and their program's default allowance
+                result = await session.execute(text("""
+                    SELECT t.teacher_id, t.full_name, t.program_id, 
+                           COALESCE(p.default_daily_allowance, 50) as default_allowance
+                    FROM teachers t
+                    LEFT JOIN programs p ON t.program_id = p.program_id
+                    WHERE t.teacher_id = :teacher_id AND t.is_active = true
+                """), {"teacher_id": teacher_id})
+                teacher = result.fetchone()
+                
+                if not teacher:
+                    raise HTTPException(status_code=404, detail="Teacher not found")
+                
+                amount = Decimal(str(base_amount)) if base_amount else Decimal(str(teacher[3]))
+                
+                # Upsert the allowance
+                await session.execute(text("""
+                    INSERT INTO teacher_daily_allowances (allowance_id, teacher_id, date, base_amount, bonus_amount, total_amount, reset_at)
+                    VALUES (gen_random_uuid(), :teacher_id, :date, :base_amount, 0, :base_amount, :now)
+                    ON CONFLICT (teacher_id, date) 
+                    DO UPDATE SET base_amount = :base_amount, total_amount = :base_amount + teacher_daily_allowances.bonus_amount, reset_at = :now
+                """), {
+                    "teacher_id": teacher_id,
+                    "date": today,
+                    "base_amount": amount,
+                    "now": datetime.now(timezone.utc)
+                })
+                await session.commit()
+                
+                return {
+                    "success": True,
+                    "teachers_affected": 1,
+                    "message": f"Allowance set to {amount} SAR for {teacher[1]}"
+                }
+            else:
+                # Reset all teachers
+                result = await session.execute(text("""
+                    SELECT t.teacher_id, t.full_name, COALESCE(p.default_daily_allowance, 50) as default_allowance
+                    FROM teachers t
+                    LEFT JOIN programs p ON t.program_id = p.program_id
+                    WHERE t.is_active = true
+                """))
+                teachers = result.fetchall()
+                
+                count = 0
+                for t in teachers:
+                    amount = Decimal(str(base_amount)) if base_amount else Decimal(str(t[2]))
+                    await session.execute(text("""
+                        INSERT INTO teacher_daily_allowances (allowance_id, teacher_id, date, base_amount, bonus_amount, total_amount, reset_at)
+                        VALUES (gen_random_uuid(), :teacher_id, :date, :base_amount, 0, :base_amount, :now)
+                        ON CONFLICT (teacher_id, date) 
+                        DO UPDATE SET base_amount = :base_amount, total_amount = :base_amount + teacher_daily_allowances.bonus_amount, reset_at = :now
+                    """), {
+                        "teacher_id": str(t[0]),
+                        "date": today,
+                        "base_amount": amount,
+                        "now": datetime.now(timezone.utc)
+                    })
+                    count += 1
+                
+                await session.commit()
+                
+                return {
+                    "success": True,
+                    "teachers_affected": count,
+                    "message": f"Reset allowances for {count} teachers"
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/teacher-allowance/bump")
+async def bump_teacher_allowance(teacher_id: str, bonus_amount: float):
+    """Add bonus to a teacher's daily allowance."""
+    from decimal import Decimal
+    from datetime import date, datetime, timezone
+    
+    try:
+        today = date.today()
+        bonus = Decimal(str(bonus_amount))
+        
+        async with async_session_factory() as session:
+            # Check if teacher exists
+            result = await session.execute(text("""
+                SELECT teacher_id, full_name FROM teachers WHERE teacher_id = :teacher_id AND is_active = true
+            """), {"teacher_id": teacher_id})
+            teacher = result.fetchone()
+            
+            if not teacher:
+                raise HTTPException(status_code=404, detail="Teacher not found")
+            
+            # Check if allowance exists for today
+            result = await session.execute(text("""
+                SELECT allowance_id, base_amount, bonus_amount, total_amount 
+                FROM teacher_daily_allowances 
+                WHERE teacher_id = :teacher_id AND date = :date
+            """), {"teacher_id": teacher_id, "date": today})
+            existing = result.fetchone()
+            
+            if existing:
+                # Update existing
+                new_bonus = Decimal(str(existing[2])) + bonus
+                new_total = Decimal(str(existing[1])) + new_bonus
+                await session.execute(text("""
+                    UPDATE teacher_daily_allowances 
+                    SET bonus_amount = :bonus, total_amount = :total, reset_at = :now
+                    WHERE teacher_id = :teacher_id AND date = :date
+                """), {
+                    "teacher_id": teacher_id,
+                    "date": today,
+                    "bonus": new_bonus,
+                    "total": new_total,
+                    "now": datetime.now(timezone.utc)
+                })
+            else:
+                # Create new with default base + bonus
+                result = await session.execute(text("""
+                    SELECT COALESCE(p.default_daily_allowance, 50) 
+                    FROM teachers t
+                    LEFT JOIN programs p ON t.program_id = p.program_id
+                    WHERE t.teacher_id = :teacher_id
+                """), {"teacher_id": teacher_id})
+                default_base = Decimal(str(result.scalar() or 50))
+                
+                await session.execute(text("""
+                    INSERT INTO teacher_daily_allowances (allowance_id, teacher_id, date, base_amount, bonus_amount, total_amount, reset_at)
+                    VALUES (gen_random_uuid(), :teacher_id, :date, :base, :bonus, :total, :now)
+                """), {
+                    "teacher_id": teacher_id,
+                    "date": today,
+                    "base": default_base,
+                    "bonus": bonus,
+                    "total": default_base + bonus,
+                    "now": datetime.now(timezone.utc)
+                })
+                new_total = default_base + bonus
+            
+            await session.commit()
+            
+            return {
+                "success": True,
+                "teacher_id": teacher_id,
+                "new_total": float(new_total),
+                "message": f"Added {bonus} SAR supplement for {teacher[1]}"
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

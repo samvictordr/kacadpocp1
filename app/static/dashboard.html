@@ -1690,11 +1690,10 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             const baseAmount = parseFloat(form.base_amount.value);
             
             try {
-                const res = await fetch(`${API_BASE.replace('/dashboard/api', '')}/admin/allowance/teacher/reset?teacher_id=${teacherId}&base_amount=${baseAmount}`, {
+                const res = await fetch(`${API_BASE}/teacher-allowance/reset?teacher_id=${teacherId}&base_amount=${baseAmount}`, {
                     method: 'POST',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     }
                 });
                 
@@ -1718,11 +1717,10 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             const bonusAmount = parseFloat(form.bonus_amount.value);
             
             try {
-                const res = await fetch(`${API_BASE.replace('/dashboard/api', '')}/admin/allowance/teacher/bump?teacher_id=${teacherId}&bonus_amount=${bonusAmount}`, {
+                const res = await fetch(`${API_BASE}/teacher-allowance/bump?teacher_id=${teacherId}&bonus_amount=${bonusAmount}`, {
                     method: 'POST',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     }
                 });
                 
@@ -1743,11 +1741,10 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             if (!confirm('Reset this teacher\'s allowance to program default?')) return;
             
             try {
-                const res = await fetch(`${API_BASE.replace('/dashboard/api', '')}/admin/allowance/teacher/reset?teacher_id=${teacherId}`, {
+                const res = await fetch(`${API_BASE}/teacher-allowance/reset?teacher_id=${teacherId}`, {
                     method: 'POST',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     }
                 });
                 
@@ -1767,11 +1764,10 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             if (!confirm('Reset ALL teacher allowances to program defaults?')) return;
             
             try {
-                const res = await fetch(`${API_BASE.replace('/dashboard/api', '')}/admin/allowance/teacher/reset`, {
+                const res = await fetch(`${API_BASE}/teacher-allowance/reset`, {
                     method: 'POST',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
+                        'Content-Type': 'application/json'
                     }
                 });
                 
