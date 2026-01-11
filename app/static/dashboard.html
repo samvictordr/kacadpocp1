@@ -519,22 +519,74 @@
                             </div>
                             <div>
                                 <h3 style="font-size: 15px; font-weight: 600; color: #0f172a; margin: 0;">CSV Format Reference</h3>
-                                <p style="font-size: 13px; color: #64748b; margin: 4px 0 0 0;">Template examples for bulk uploads</p>
+                                <p style="font-size: 13px; color: #64748b; margin: 4px 0 0 0;">Template examples and requirements for bulk uploads</p>
                             </div>
                         </div>
+                        
+                        <!-- Important Notes -->
+                        <div class="info-box info-box-info" style="margin-bottom: 20px;">
+                            <i class="fa-solid fa-circle-info" style="margin-top: 2px;"></i>
+                            <div>
+                                <strong>Important CSV Requirements:</strong>
+                                <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px;">
+                                    <li>Save your file as <strong>CSV (Comma delimited)</strong> or <strong>CSV UTF-8</strong></li>
+                                    <li>First row must be the header row with column names</li>
+                                    <li>Duplicate emails will be skipped (not overwritten)</li>
+                                    <li>Default password for all new users: <code style="background: rgba(255,255,255,0.5); padding: 2px 6px; border-radius: 4px;">temp123</code></li>
+                                </ul>
+                            </div>
+                        </div>
+                        
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
                             <div>
-                                <h4 style="font-size: 14px; font-weight: 600; color: #1e293b; margin: 0 0 12px 0;">Student CSV Template</h4>
-                                <pre class="mono" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto; margin: 0;">full_name,email,phone_number
+                                <h4 style="font-size: 14px; font-weight: 600; color: #1e293b; margin: 0 0 12px 0;">
+                                    <i class="fa-solid fa-user-graduate" style="color: #2563eb; margin-right: 8px;"></i>Student CSV Template
+                                </h4>
+                                <pre class="mono" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto; margin: 0 0 12px 0;">full_name,email,phone_number
 Ahmed Mohammed,ahmed@academy.edu,+966501234567
-Sara Abdullah,sara@academy.edu,+966501234568</pre>
+Sara Abdullah,sara@academy.edu,0501234568
+محمد أحمد,mohammed@academy.edu,+966509876543</pre>
+                                <div style="font-size: 12px; color: #64748b;">
+                                    <strong>Required:</strong> full_name, email<br>
+                                    <strong>Optional:</strong> phone_number (Saudi format: +966XXXXXXXXX or 05XXXXXXXX)
+                                </div>
                             </div>
                             <div>
-                                <h4 style="font-size: 14px; font-weight: 600; color: #1e293b; margin: 0 0 12px 0;">Teacher CSV Template</h4>
-                                <pre class="mono" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto; margin: 0;">full_name,email
+                                <h4 style="font-size: 14px; font-weight: 600; color: #1e293b; margin: 0 0 12px 0;">
+                                    <i class="fa-solid fa-chalkboard-user" style="color: #059669; margin-right: 8px;"></i>Teacher CSV Template
+                                </h4>
+                                <pre class="mono" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto; margin: 0 0 12px 0;">full_name,email
 Dr. Khalid Ibrahim,khalid@academy.edu
-Dr. Fatima Al-Saud,fatima@academy.edu</pre>
+Dr. Fatima Al-Saud,fatima@academy.edu
+أحمد محمد,ahmed.teacher@academy.edu</pre>
+                                <div style="font-size: 12px; color: #64748b;">
+                                    <strong>Required:</strong> full_name, email
+                                </div>
                             </div>
+                        </div>
+                        
+                        <!-- Phone Number Format Help -->
+                        <div style="margin-top: 20px; padding: 16px; background: #fefce8; border: 1px solid #fde047; border-radius: 8px;">
+                            <h4 style="font-size: 14px; font-weight: 600; color: #854d0e; margin: 0 0 8px 0;">
+                                <i class="fa-solid fa-phone" style="margin-right: 8px;"></i>Phone Number Format
+                            </h4>
+                            <div style="font-size: 13px; color: #713f12;">
+                                Valid formats: <code>+966501234567</code>, <code>966501234567</code>, <code>0501234567</code>, <code>501234567</code><br>
+                                All phone numbers are normalized to <code>+966XXXXXXXXX</code> format
+                            </div>
+                        </div>
+                        
+                        <!-- Common Errors -->
+                        <div style="margin-top: 20px; padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;">
+                            <h4 style="font-size: 14px; font-weight: 600; color: #991b1b; margin: 0 0 8px 0;">
+                                <i class="fa-solid fa-triangle-exclamation" style="margin-right: 8px;"></i>Common Errors & Solutions
+                            </h4>
+                            <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #7f1d1d;">
+                                <li><strong>Duplicate email:</strong> User already exists - will be skipped automatically</li>
+                                <li><strong>Missing column:</strong> Check that header row has exact column names (case-sensitive)</li>
+                                <li><strong>Invalid phone:</strong> Must be Saudi format - international (+966) or local (05)</li>
+                                <li><strong>Encoding issues:</strong> Save as CSV UTF-8 in Excel, or use Google Sheets</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -2180,21 +2232,73 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
+            const resultDiv = document.getElementById('bulkStudentResult');
+            
+            resultDiv.innerHTML = '<div class="info-box info-box-info"><i class="fa-solid fa-spinner fa-spin"></i> <span>Uploading and processing CSV...</span></div>';
             
             try {
                 const res = await fetch(`${API_BASE}/bulk/students`, { method: 'POST', body: formData });
                 const result = await res.json();
                 
-                document.getElementById('bulkStudentResult').innerHTML = `
-                    <div class="info-box ${result.errors?.length > 0 ? 'info-box-warning' : 'info-box-success'}">
-                        <i class="fa-solid fa-circle-check" style="margin-top: 2px;"></i>
-                        <span>Successfully created ${result.created} students
-                        ${result.errors?.length > 0 ? `<br><span style="color: #92400e; margin-top: 4px; display: block;"><i class="fa-solid fa-triangle-exclamation"></i> ${result.errors.length} errors occurred</span>` : ''}</span>
+                let html = '';
+                
+                // Summary section
+                const hasErrors = result.errors?.length > 0;
+                const hasSkipped = result.skipped?.length > 0;
+                const statusClass = hasErrors ? 'info-box-warning' : (hasSkipped ? 'info-box-info' : 'info-box-success');
+                const icon = hasErrors ? 'fa-triangle-exclamation' : (hasSkipped ? 'fa-circle-info' : 'fa-circle-check');
+                
+                html += `<div class="info-box ${statusClass}" style="margin-bottom: 16px;">
+                    <i class="fa-solid ${icon}" style="margin-top: 2px;"></i>
+                    <div>
+                        <strong>${result.message || `Successfully created ${result.created} students`}</strong>
+                        <div style="margin-top: 8px; font-size: 13px;">
+                            <span style="color: #059669;">✓ ${result.created} created</span>
+                            ${hasSkipped ? `<span style="margin-left: 12px; color: #d97706;">⊘ ${result.skipped.length} skipped (duplicates)</span>` : ''}
+                            ${hasErrors ? `<span style="margin-left: 12px; color: #dc2626;">✗ ${result.errors.length} failed</span>` : ''}
+                        </div>
                     </div>
-                `;
-                loadStudents();
+                </div>`;
+                
+                // Skipped entries (duplicates)
+                if (hasSkipped) {
+                    html += `<details style="margin-bottom: 12px;">
+                        <summary style="cursor: pointer; font-weight: 600; color: #d97706; padding: 8px 0;">
+                            <i class="fa-solid fa-user-xmark"></i> ${result.skipped.length} Duplicate(s) Skipped
+                        </summary>
+                        <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-top: 8px;">
+                            <table style="width: 100%; font-size: 13px;">
+                                <thead><tr style="text-align: left;"><th>Row</th><th>Email/Name</th><th>Reason</th></tr></thead>
+                                <tbody>
+                                    ${result.skipped.map(s => `<tr><td>${s.row_num || '-'}</td><td>${s.row}</td><td>${s.reason}</td></tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>`;
+                }
+                
+                // Error details
+                if (hasErrors) {
+                    html += `<details style="margin-bottom: 12px;" open>
+                        <summary style="cursor: pointer; font-weight: 600; color: #dc2626; padding: 8px 0;">
+                            <i class="fa-solid fa-circle-xmark"></i> ${result.errors.length} Error(s)
+                        </summary>
+                        <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 12px; margin-top: 8px;">
+                            <table style="width: 100%; font-size: 13px;">
+                                <thead><tr style="text-align: left;"><th>Row</th><th>Email/Name</th><th>Error</th></tr></thead>
+                                <tbody>
+                                    ${result.errors.map(e => `<tr><td>${e.row_num || '-'}</td><td>${e.row}</td><td style="color: #dc2626;">${e.error}</td></tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>`;
+                }
+                
+                resultDiv.innerHTML = html;
+                if (result.created > 0) loadStudents();
+                form.reset();
             } catch (e) {
-                document.getElementById('bulkStudentResult').innerHTML = `<div class="info-box info-box-warning"><i class="fa-solid fa-circle-xmark" style="margin-top: 2px;"></i> <span>Error: ${e.message}</span></div>`;
+                resultDiv.innerHTML = `<div class="info-box info-box-warning"><i class="fa-solid fa-circle-xmark" style="margin-top: 2px;"></i> <span>Error: ${e.message}</span></div>`;
             }
         }
 
@@ -2202,21 +2306,73 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
+            const resultDiv = document.getElementById('bulkTeacherResult');
+            
+            resultDiv.innerHTML = '<div class="info-box info-box-info"><i class="fa-solid fa-spinner fa-spin"></i> <span>Uploading and processing CSV...</span></div>';
             
             try {
                 const res = await fetch(`${API_BASE}/bulk/teachers`, { method: 'POST', body: formData });
                 const result = await res.json();
                 
-                document.getElementById('bulkTeacherResult').innerHTML = `
-                    <div class="info-box ${result.errors?.length > 0 ? 'info-box-warning' : 'info-box-success'}">
-                        <i class="fa-solid fa-circle-check" style="margin-top: 2px;"></i>
-                        <span>Successfully created ${result.created} teachers
-                        ${result.errors?.length > 0 ? `<br><span style="color: #92400e; margin-top: 4px; display: block;"><i class="fa-solid fa-triangle-exclamation"></i> ${result.errors.length} errors occurred</span>` : ''}</span>
+                let html = '';
+                
+                // Summary section
+                const hasErrors = result.errors?.length > 0;
+                const hasSkipped = result.skipped?.length > 0;
+                const statusClass = hasErrors ? 'info-box-warning' : (hasSkipped ? 'info-box-info' : 'info-box-success');
+                const icon = hasErrors ? 'fa-triangle-exclamation' : (hasSkipped ? 'fa-circle-info' : 'fa-circle-check');
+                
+                html += `<div class="info-box ${statusClass}" style="margin-bottom: 16px;">
+                    <i class="fa-solid ${icon}" style="margin-top: 2px;"></i>
+                    <div>
+                        <strong>${Array.isArray(result.message) ? result.message.join(', ') : (result.message || `Successfully created ${result.created} teachers`)}</strong>
+                        <div style="margin-top: 8px; font-size: 13px;">
+                            <span style="color: #059669;">✓ ${result.created} created</span>
+                            ${hasSkipped ? `<span style="margin-left: 12px; color: #d97706;">⊘ ${result.skipped.length} skipped (duplicates)</span>` : ''}
+                            ${hasErrors ? `<span style="margin-left: 12px; color: #dc2626;">✗ ${result.errors.length} failed</span>` : ''}
+                        </div>
                     </div>
-                `;
-                loadTeachers();
+                </div>`;
+                
+                // Skipped entries (duplicates)
+                if (hasSkipped) {
+                    html += `<details style="margin-bottom: 12px;">
+                        <summary style="cursor: pointer; font-weight: 600; color: #d97706; padding: 8px 0;">
+                            <i class="fa-solid fa-user-xmark"></i> ${result.skipped.length} Duplicate(s) Skipped
+                        </summary>
+                        <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-top: 8px;">
+                            <table style="width: 100%; font-size: 13px;">
+                                <thead><tr style="text-align: left;"><th>Row</th><th>Email/Name</th><th>Reason</th></tr></thead>
+                                <tbody>
+                                    ${result.skipped.map(s => `<tr><td>${s.row_num || '-'}</td><td>${s.row}</td><td>${s.reason}</td></tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>`;
+                }
+                
+                // Error details
+                if (hasErrors) {
+                    html += `<details style="margin-bottom: 12px;" open>
+                        <summary style="cursor: pointer; font-weight: 600; color: #dc2626; padding: 8px 0;">
+                            <i class="fa-solid fa-circle-xmark"></i> ${result.errors.length} Error(s)
+                        </summary>
+                        <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 12px; margin-top: 8px;">
+                            <table style="width: 100%; font-size: 13px;">
+                                <thead><tr style="text-align: left;"><th>Row</th><th>Email/Name</th><th>Error</th></tr></thead>
+                                <tbody>
+                                    ${result.errors.map(e => `<tr><td>${e.row_num || '-'}</td><td>${e.row}</td><td style="color: #dc2626;">${e.error}</td></tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>`;
+                }
+                
+                resultDiv.innerHTML = html;
+                if (result.created > 0) loadTeachers();
+                form.reset();
             } catch (e) {
-                document.getElementById('bulkTeacherResult').innerHTML = `<div class="info-box info-box-warning"><i class="fa-solid fa-circle-xmark" style="margin-top: 2px;"></i> <span>Error: ${e.message}</span></div>`;
+                resultDiv.innerHTML = `<div class="info-box info-box-warning"><i class="fa-solid fa-circle-xmark" style="margin-top: 2px;"></i> <span>Error: ${e.message}</span></div>`;
             }
         }
 

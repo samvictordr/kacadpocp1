@@ -1413,6 +1413,65 @@ async def get_attendance_summary(program_id: Optional[str] = None):
 
 # ==================== BULK UPLOAD ====================
 
+def parse_bulk_upload_error(error_str: str, email: str = "") -> str:
+    """Convert raw database errors to user-friendly messages."""
+    error_str = str(error_str)
+    
+    # MongoDB duplicate key error
+    if "E11000" in error_str and "duplicate key" in error_str:
+        if "email" in error_str:
+            return f"A user with email '{email}' already exists in the system"
+        return "Duplicate record found - this entry already exists"
+    
+    # Missing required field
+    if error_str.startswith("'") and error_str.endswith("'"):
+        field_name = error_str.strip("'")
+        return f"Required column '{field_name}' is missing from the CSV"
+    
+    # KeyError for missing column
+    if "KeyError" in error_str:
+        return f"Required column is missing from the CSV"
+    
+    # PostgreSQL unique constraint
+    if "unique constraint" in error_str.lower() or "duplicate key value" in error_str.lower():
+        return f"A record with this data already exists"
+    
+    # Return original if no match
+    return error_str
+
+def try_decode_csv(content: bytes) -> str:
+    """Try multiple encodings to decode CSV content."""
+    # Try encodings in order of likelihood
+    encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+    
+    for encoding in encodings:
+        try:
+            return content.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    
+    # Last resort: decode with errors='replace'
+    return content.decode('utf-8', errors='replace')
+
+def validate_csv_columns(reader, required_columns: list) -> tuple:
+    """Validate that required columns exist in CSV."""
+    if not reader.fieldnames:
+        return False, "CSV file appears to be empty or has no header row"
+    
+    # Normalize column names (strip whitespace, lowercase for comparison)
+    actual_columns = [c.strip().lower() if c else '' for c in reader.fieldnames]
+    missing = []
+    
+    for col in required_columns:
+        if col.lower() not in actual_columns:
+            missing.append(col)
+    
+    if missing:
+        return False, f"Missing required column(s): {', '.join(missing)}"
+    
+    return True, None
+
+
 @router.post("/api/bulk/students")
 async def bulk_upload_students(
     file: UploadFile = File(...), 
@@ -1425,20 +1484,79 @@ async def bulk_upload_students(
             raise HTTPException(status_code=503, detail="MongoDB not connected")
             
         content = await file.read()
-        # Decode and remove BOM if present
-        decoded_content = content.decode('utf-8-sig')  # utf-8-sig handles BOM automatically
+        
+        # Try multiple encodings
+        decoded_content = try_decode_csv(content)
         reader = csv.DictReader(io.StringIO(decoded_content))
         
-        created, errors = 0, []
+        # Validate required columns
+        required_cols = ["full_name", "email"]
+        is_valid, error_msg = validate_csv_columns(reader, required_cols)
+        if not is_valid:
+            return {
+                "success": False, 
+                "created": 0, 
+                "errors": [{"row": "Header", "error": error_msg}],
+                "skipped": [],
+                "message": error_msg
+            }
+        
+        # Reset reader to start
+        reader = csv.DictReader(io.StringIO(decoded_content))
+        
+        created, errors, skipped = 0, [], []
+        row_num = 1  # Start at 1 for data rows (after header)
         
         for row in reader:
+            row_num += 1
+            row_identifier = row.get("email", "").strip() or row.get("full_name", "").strip() or f"Row {row_num}"
+            
             try:
-                # Validate phone number
-                phone_number = row.get("phone_number", "")
+                # Get and normalize values
+                email = row.get("email", "").strip()
+                full_name = row.get("full_name", "").strip()
+                phone_number = row.get("phone_number", "").strip()
+                
+                # Validate required fields
+                if not email:
+                    errors.append({
+                        "row": row_identifier, 
+                        "row_num": row_num,
+                        "error": "Email is required but was empty",
+                        "type": "validation"
+                    })
+                    continue
+                    
+                if not full_name:
+                    errors.append({
+                        "row": row_identifier, 
+                        "row_num": row_num,
+                        "error": "Full name is required but was empty",
+                        "type": "validation"
+                    })
+                    continue
+                
+                # Check if email already exists
+                existing_user = await mongodb.db.users.find_one({"email": email})
+                if existing_user:
+                    skipped.append({
+                        "row": row_identifier,
+                        "row_num": row_num,
+                        "reason": f"User with email '{email}' already exists",
+                        "type": "duplicate"
+                    })
+                    continue
+                
+                # Validate phone number if provided
                 if phone_number:
                     is_valid, result = validate_saudi_phone(phone_number)
                     if not is_valid:
-                        errors.append({"row": row.get("email", "?"), "error": result})
+                        errors.append({
+                            "row": row_identifier, 
+                            "row_num": row_num,
+                            "error": result,
+                            "type": "validation"
+                        })
                         continue
                     phone_number = result
                 
@@ -1452,9 +1570,9 @@ async def bulk_upload_students(
                 await mongodb.db.users.insert_one({
                     "_id": user_id,
                     "user_id": user_id,
-                    "email": row["email"],
-                    "name": row["full_name"],
-                    "full_name": row["full_name"],
+                    "email": email,
+                    "name": full_name,
+                    "full_name": full_name,
                     "role": "student",
                     "status": "active",
                     "auth": {
@@ -1475,7 +1593,7 @@ async def bulk_upload_students(
                     """), {
                         "student_id": student_id,
                         "user_id": user_id,
-                        "full_name": row["full_name"],
+                        "full_name": full_name,
                         "phone_number": phone_number or None,
                         "program_id": program_id
                     })
@@ -1493,13 +1611,45 @@ async def bulk_upload_students(
                     
                     await session.commit()
                 created += 1
+                
+            except KeyError as e:
+                errors.append({
+                    "row": row_identifier, 
+                    "row_num": row_num,
+                    "error": f"Required column '{str(e).strip(chr(39))}' is missing",
+                    "type": "missing_column"
+                })
             except Exception as e:
-                errors.append({"row": row.get("email", "?"), "error": str(e)})
+                errors.append({
+                    "row": row_identifier, 
+                    "row_num": row_num,
+                    "error": parse_bulk_upload_error(str(e), email if 'email' in dir() else ""),
+                    "type": "error"
+                })
         
-        return {"success": True, "created": created, "errors": errors}
+        # Build summary message
+        total_processed = created + len(errors) + len(skipped)
+        message_parts = [f"Processed {total_processed} rows:"]
+        if created > 0:
+            message_parts.append(f"{created} created successfully")
+        if skipped:
+            message_parts.append(f"{len(skipped)} skipped (duplicates)")
+        if errors:
+            message_parts.append(f"{len(errors)} failed")
+        
+        return {
+            "success": True, 
+            "created": created, 
+            "errors": errors,
+            "skipped": skipped,
+            "total_rows": total_processed,
+            "message": ", ".join(message_parts)
+        }
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1511,23 +1661,77 @@ async def bulk_upload_teachers(file: UploadFile = File(...), program_id: str = F
             raise HTTPException(status_code=503, detail="MongoDB not connected")
             
         content = await file.read()
-        # Decode and remove BOM if present
-        decoded_content = content.decode('utf-8-sig')  # utf-8-sig handles BOM automatically
+        
+        # Try multiple encodings
+        decoded_content = try_decode_csv(content)
         reader = csv.DictReader(io.StringIO(decoded_content))
         
-        created, errors = 0, []
+        # Validate required columns
+        required_cols = ["full_name", "email"]
+        is_valid, error_msg = validate_csv_columns(reader, required_cols)
+        if not is_valid:
+            return {
+                "success": False, 
+                "created": 0, 
+                "errors": [{"row": "Header", "error": error_msg}],
+                "skipped": [],
+                "message": error_msg
+            }
+        
+        # Reset reader to start
+        reader = csv.DictReader(io.StringIO(decoded_content))
+        
+        created, errors, skipped = 0, [], []
+        row_num = 1
         
         for row in reader:
+            row_num += 1
+            row_identifier = row.get("email", "").strip() or row.get("full_name", "").strip() or f"Row {row_num}"
+            
             try:
+                # Get and normalize values
+                email = row.get("email", "").strip()
+                full_name = row.get("full_name", "").strip()
+                
+                # Validate required fields
+                if not email:
+                    errors.append({
+                        "row": row_identifier, 
+                        "row_num": row_num,
+                        "error": "Email is required but was empty",
+                        "type": "validation"
+                    })
+                    continue
+                    
+                if not full_name:
+                    errors.append({
+                        "row": row_identifier, 
+                        "row_num": row_num,
+                        "error": "Full name is required but was empty",
+                        "type": "validation"
+                    })
+                    continue
+                
+                # Check if email already exists
+                existing_user = await mongodb.db.users.find_one({"email": email})
+                if existing_user:
+                    skipped.append({
+                        "row": row_identifier,
+                        "row_num": row_num,
+                        "reason": f"User with email '{email}' already exists",
+                        "type": "duplicate"
+                    })
+                    continue
+                
                 user_id = str(uuid.uuid4())
                 password_hash = hash_password("temp123")
                 
                 await mongodb.db.users.insert_one({
                     "_id": user_id,
                     "user_id": user_id,
-                    "email": row["email"],
-                    "name": row["full_name"],
-                    "full_name": row["full_name"],
+                    "email": email,
+                    "name": full_name,
+                    "full_name": full_name,
                     "role": "teacher",
                     "status": "active",
                     "auth": {
@@ -1548,18 +1752,50 @@ async def bulk_upload_teachers(file: UploadFile = File(...), program_id: str = F
                     """), {
                         "teacher_id": str(uuid.uuid4()),
                         "user_id": user_id,
-                        "full_name": row["full_name"],
+                        "full_name": full_name,
                         "program_id": program_id
                     })
                     await session.commit()
                 created += 1
+                
+            except KeyError as e:
+                errors.append({
+                    "row": row_identifier, 
+                    "row_num": row_num,
+                    "error": f"Required column '{str(e).strip(chr(39))}' is missing",
+                    "type": "missing_column"
+                })
             except Exception as e:
-                errors.append({"row": row.get("email", "?"), "error": str(e)})
+                errors.append({
+                    "row": row_identifier, 
+                    "row_num": row_num,
+                    "error": parse_bulk_upload_error(str(e), email if 'email' in dir() else ""),
+                    "type": "error"
+                })
         
-        return {"success": True, "created": created, "errors": errors}
+        # Build summary message
+        total_processed = created + len(errors) + len(skipped)
+        message_parts = [f"Processed {total_processed} rows:"]
+        if created > 0:
+            message_parts.append(f"{created} created successfully")
+        if skipped:
+            message_parts.append(f"{len(skipped)} skipped (duplicates)")
+        if errors:
+            message_parts.append(f"{len(errors)} failed")
+        
+        return {
+            "success": True, 
+            "created": created, 
+            "errors": errors,
+            "skipped": skipped,
+            "total_rows": total_processed,
+            "message": message_parts
+        }
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
