@@ -1018,22 +1018,26 @@ async def get_allowances(filter_date: Optional[str] = None, user_type: Optional[
             if user_type != 'student':
                 if filter_date:
                     result = await session.execute(text("""
-                        SELECT tda.allowance_id, tda.teacher_id as user_id, tda.date, tda.base_amount, 
-                               tda.bonus_amount, tda.total_amount, t.full_name, 'teacher' as user_type
+                        SELECT tda.allowance_id, tda.teacher_id as user_id, tda.teacher_id, tda.date, tda.base_amount, 
+                               tda.bonus_amount, tda.total_amount, t.full_name, 'teacher' as user_type,
+                               COALESCE(p.name, 'N/A') as program_name
                         FROM teacher_daily_allowances tda
                         JOIN teachers t ON tda.teacher_id = t.teacher_id
+                        LEFT JOIN programs p ON t.program_id = p.program_id
                         WHERE tda.date = :filter_date ORDER BY t.full_name
                     """), {"filter_date": filter_date})
                 else:
                     result = await session.execute(text("""
-                        SELECT tda.allowance_id, tda.teacher_id as user_id, tda.date, tda.base_amount, 
-                               tda.bonus_amount, tda.total_amount, t.full_name, 'teacher' as user_type
+                        SELECT tda.allowance_id, tda.teacher_id as user_id, tda.teacher_id, tda.date, tda.base_amount, 
+                               tda.bonus_amount, tda.total_amount, t.full_name, 'teacher' as user_type,
+                               COALESCE(p.name, 'N/A') as program_name
                         FROM teacher_daily_allowances tda
                         JOIN teachers t ON tda.teacher_id = t.teacher_id
+                        LEFT JOIN programs p ON t.program_id = p.program_id
                         ORDER BY tda.date DESC, t.full_name LIMIT 100
                     """))
                 rows = result.fetchall()
-                columns = ["allowance_id", "user_id", "date", "base_amount", "bonus_amount", "total_amount", "full_name", "user_type"]
+                columns = ["allowance_id", "user_id", "teacher_id", "date", "base_amount", "bonus_amount", "total_amount", "full_name", "user_type", "program_name"]
                 results.extend([dict(zip(columns, row)) for row in rows])
             
             # Sort combined results by date desc, then name
@@ -1581,3 +1585,70 @@ async def verify_session(token: str):
         return {"valid": False}
     except:
         return {"valid": False}
+
+
+# ==================== CRON/SCHEDULED TASKS ====================
+
+@router.post("/api/cron/reset-allowances")
+async def cron_reset_allowances(secret: str = None):
+    """
+    Daily allowance reset endpoint for cron jobs.
+    Resets all students' and teachers' allowances to their program's default_daily_allowance.
+    This should be called once per day by a scheduler (e.g., Render cron job).
+    
+    For security, pass a secret key matching the CRON_SECRET environment variable.
+    """
+    import os
+    from decimal import Decimal
+    from datetime import date
+    from app.services.allowance_service import AllowanceService
+    from app.db.redis import redis_client as redis
+    from app.core.config import settings
+    
+    # Verify cron secret for production security
+    expected_secret = os.environ.get("CRON_SECRET", "kaustcron2025")
+    if secret != expected_secret:
+        raise HTTPException(status_code=403, detail="Invalid cron secret")
+    
+    try:
+        async with async_session_factory() as session:
+            service = AllowanceService(session, redis)
+            result = await service.reset_program_allowances(admin_id="system")
+            await session.commit()
+            
+            return {
+                "success": True,
+                **result,
+                "message": f"Daily reset complete: {result['students_reset']} students, {result['teachers_reset']} teachers across {result['programs_processed']} active programs"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/cron/status")
+async def cron_status():
+    """Check if daily allowance reset was run today."""
+    from datetime import date
+    
+    try:
+        today = str(date.today())
+        async with async_session_factory() as session:
+            # Check if any allowances were reset today
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM daily_allowances WHERE date = :today
+            """), {"today": today})
+            student_count = result.scalar() or 0
+            
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM teacher_daily_allowances WHERE date = :today
+            """), {"today": today})
+            teacher_count = result.scalar() or 0
+            
+            return {
+                "date": today,
+                "student_allowances_set": student_count,
+                "teacher_allowances_set": teacher_count,
+                "status": "ok" if (student_count > 0 or teacher_count > 0) else "not_run"
+            }
+    except Exception as e:
+        return {"date": str(date.today()), "status": "error", "error": str(e)}

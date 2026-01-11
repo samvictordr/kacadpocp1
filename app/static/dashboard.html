@@ -545,7 +545,9 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                         <button class="tab-btn active" data-tab="viewAllowances">View Allowances</button>
                         <button class="tab-btn" data-tab="setAllowance">Set Individual</button>
                         <button class="tab-btn" data-tab="bulkAllowance">Bulk Set</button>
+                        <button class="tab-btn" data-tab="teacherAllowances">Teacher Allowances</button>
                         <button class="tab-btn" data-tab="addSupplement">Add Supplement</button>
+                        <button class="tab-btn" data-tab="dailyReset">Daily Reset</button>
                     </div>
                     
                     <div id="tab-viewAllowances" class="tab-content">
@@ -654,6 +656,101 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                                 </div>
                                 <button type="submit" class="btn-primary">Add Supplement</button>
                             </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Teacher Allowances Tab -->
+                    <div id="tab-teacherAllowances" class="tab-content hidden">
+                        <div class="card">
+                            <div class="p-4 border-b border-enterprise-100 flex items-center justify-between flex-wrap gap-4">
+                                <div class="flex items-center gap-4">
+                                    <label class="text-sm font-medium text-enterprise-700">Date:</label>
+                                    <input type="date" id="teacherAllowanceDate" class="w-48">
+                                    <button onclick="loadTeacherAllowances()" class="btn-primary">Load</button>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="resetAllTeacherAllowances()" class="btn-secondary" title="Reset all teacher allowances to program defaults">
+                                        <i class="fa-solid fa-rotate"></i> Reset All
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table>
+                                    <thead><tr><th>Teacher Name</th><th>Program</th><th>Date</th><th>Base Amount</th><th>Supplement</th><th>Total</th><th>Actions</th></tr></thead>
+                                    <tbody id="teacherAllowancesTable"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-8 max-w-lg mt-6">
+                            <div class="mb-6">
+                                <h3 class="font-semibold text-enterprise-900">Set Teacher Allowance</h3>
+                                <p class="text-sm text-enterprise-500">Configure meal allowance for a specific teacher</p>
+                            </div>
+                            <form id="setTeacherAllowanceForm" class="space-y-5">
+                                <div>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Teacher <span class="text-danger">*</span></label>
+                                    <select name="teacher_id" required class="w-full" id="teacherAllowanceSelect"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Base Amount (SAR) <span class="text-danger">*</span></label>
+                                    <input type="number" name="base_amount" required value="50" step="0.01" class="w-full">
+                                </div>
+                                <button type="submit" class="btn-primary">Set Allowance</button>
+                            </form>
+                        </div>
+                        
+                        <div class="card p-8 max-w-lg mt-6">
+                            <div class="mb-6">
+                                <h3 class="font-semibold text-enterprise-900">Add Teacher Supplement</h3>
+                                <p class="text-sm text-enterprise-500">Add bonus amount to a teacher's allowance</p>
+                            </div>
+                            <form id="bumpTeacherAllowanceForm" class="space-y-5">
+                                <div>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Teacher <span class="text-danger">*</span></label>
+                                    <select name="teacher_id" required class="w-full" id="teacherBumpSelect"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-enterprise-700 mb-2">Supplement Amount (SAR) <span class="text-danger">*</span></label>
+                                    <input type="number" name="bonus_amount" required step="0.01" class="w-full" placeholder="e.g., 25.00">
+                                </div>
+                                <button type="submit" class="btn-primary">Add Supplement</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Daily Reset Tab -->
+                    <div id="tab-dailyReset" class="tab-content hidden">
+                        <div class="card p-8 max-w-2xl">
+                            <div class="mb-6">
+                                <h3 class="font-semibold text-enterprise-900">Daily Allowance Reset</h3>
+                                <p class="text-sm text-enterprise-500">Reset all allowances to program defaults. This happens automatically daily via cron job.</p>
+                            </div>
+                            
+                            <div id="cronStatusBox" class="info-box info-box-info mb-6">
+                                <i class="fa-solid fa-clock"></i>
+                                <div>
+                                    <strong>Cron Status:</strong> <span id="cronStatusText">Checking...</span>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div class="flex gap-4 items-center">
+                                    <select id="resetProgramSelect" class="w-64">
+                                        <option value="">All Active Programs</option>
+                                    </select>
+                                    <button onclick="runDailyReset()" class="btn-primary">
+                                        <i class="fa-solid fa-rotate-right"></i> Run Reset Now
+                                    </button>
+                                </div>
+                                
+                                <div class="info-box info-box-warning">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <span>This will reset <strong>all students' and teachers'</strong> daily allowances to their program's default amount. Existing supplements will be cleared.</span>
+                                </div>
+                                
+                                <div id="resetResultBox" class="hidden mt-4 p-4 rounded border"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1039,9 +1136,12 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             document.getElementById('createProgramForm').addEventListener('submit', handleCreateProgram);
             document.getElementById('addSupplementForm').addEventListener('submit', handleAddSupplement);
             document.getElementById('createClassForm').addEventListener('submit', handleCreateClass);
+            document.getElementById('setTeacherAllowanceForm').addEventListener('submit', handleSetTeacherAllowance);
+            document.getElementById('bumpTeacherAllowanceForm').addEventListener('submit', handleBumpTeacherAllowance);
             
             // Set default date for supplement
             document.getElementById('supplementDate').valueAsDate = new Date();
+            document.getElementById('teacherAllowanceDate').valueAsDate = new Date();
         }
 
         async function handleLogin(e) {
@@ -1137,7 +1237,16 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
             
             if (page === 'users') { loadStudents(); loadTeachers(); loadPrograms().then(() => loadProgramSelects()); }
             if (page === 'bulk') { loadPrograms().then(() => loadProgramSelects()); }
-            if (page === 'allowances') { loadStudentSelect(); loadPrograms().then(() => loadProgramSelects()); updateSupplementTargets(); }
+            if (page === 'allowances') { 
+                loadStudentSelect(); 
+                loadPrograms().then(() => { 
+                    loadProgramSelects(); 
+                    loadResetProgramSelect();
+                }); 
+                updateSupplementTargets(); 
+                loadTeacherSelectsForAllowance();
+                checkCronStatus();
+            }
             if (page === 'programs') { 
                 loadPrograms().then(() => {
                     loadTeachers().then(() => loadClassFormSelects());
@@ -1507,6 +1616,228 @@ Dr. Fatima Al-Saud,fatima@academy.edu</pre>
                 `).join('') || '<tr><td colspan="6" class="text-center text-enterprise-500 py-8">No allowances found for the selected criteria</td></tr>';
             } catch (e) {
                 showToast('Failed to load allowances', 'error');
+            }
+        }
+
+        // ===== TEACHER ALLOWANCES =====
+        async function loadTeacherAllowances() {
+            const date = document.getElementById('teacherAllowanceDate').value;
+            try {
+                let url = `${API_BASE}/allowances?user_type=teacher`;
+                if (date) url += `&filter_date=${date}`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                // Also load teachers for the select dropdowns
+                loadTeacherSelectsForAllowance();
+                
+                const tbody = document.getElementById('teacherAllowancesTable');
+                tbody.innerHTML = data.map(a => `
+                    <tr>
+                        <td class="font-medium">${a.full_name}</td>
+                        <td>${a.program_name || 'N/A'}</td>
+                        <td>${a.date}</td>
+                        <td>${a.base_amount} SAR</td>
+                        <td>${a.bonus_amount} SAR</td>
+                        <td class="font-semibold text-enterprise-900">${a.total_amount} SAR</td>
+                        <td>
+                            <button onclick="resetSingleTeacherAllowance('${a.teacher_id}')" class="btn-secondary btn-sm" title="Reset to default">
+                                <i class="fa-solid fa-rotate"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('') || '<tr><td colspan="7" class="text-center text-enterprise-500 py-8">No teacher allowances found</td></tr>';
+            } catch (e) {
+                console.error('Load teacher allowances failed:', e);
+                showToast('Failed to load teacher allowances', 'error');
+            }
+        }
+        
+        async function loadTeacherSelectsForAllowance() {
+            // Load teachers from the backend for the allowance selects
+            try {
+                const res = await fetch(`${API_BASE}/users?role=teacher`);
+                const data = await res.json();
+                const teachersList = data.users || [];
+                
+                const options = teachersList.map(t => `<option value="${t.teacher_id || t.user_id}">${t.full_name}</option>`).join('');
+                const optionsHtml = '<option value="">Select Teacher</option>' + options;
+                
+                document.getElementById('teacherAllowanceSelect').innerHTML = optionsHtml;
+                document.getElementById('teacherBumpSelect').innerHTML = optionsHtml;
+            } catch (e) {
+                console.error('Failed to load teachers for allowance:', e);
+            }
+        }
+        
+        async function handleSetTeacherAllowance(e) {
+            e.preventDefault();
+            const form = e.target;
+            const teacherId = form.teacher_id.value;
+            const baseAmount = parseFloat(form.base_amount.value);
+            
+            try {
+                const res = await fetch(`${API_BASE.replace('/dashboard/api', '')}/admin/allowance/teacher/reset?teacher_id=${teacherId}&base_amount=${baseAmount}`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (res.ok) {
+                    showToast('Teacher allowance set successfully', 'success');
+                    loadTeacherAllowances();
+                    form.reset();
+                } else {
+                    const error = await res.json();
+                    showToast(error.detail || 'Failed to set teacher allowance', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to set teacher allowance', 'error');
+            }
+        }
+        
+        async function handleBumpTeacherAllowance(e) {
+            e.preventDefault();
+            const form = e.target;
+            const teacherId = form.teacher_id.value;
+            const bonusAmount = parseFloat(form.bonus_amount.value);
+            
+            try {
+                const res = await fetch(`${API_BASE.replace('/dashboard/api', '')}/admin/allowance/teacher/bump?teacher_id=${teacherId}&bonus_amount=${bonusAmount}`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (res.ok) {
+                    showToast('Teacher supplement added successfully', 'success');
+                    loadTeacherAllowances();
+                    form.reset();
+                } else {
+                    const error = await res.json();
+                    showToast(error.detail || 'Failed to add teacher supplement', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to add teacher supplement', 'error');
+            }
+        }
+        
+        async function resetSingleTeacherAllowance(teacherId) {
+            if (!confirm('Reset this teacher\'s allowance to program default?')) return;
+            
+            try {
+                const res = await fetch(`${API_BASE.replace('/dashboard/api', '')}/admin/allowance/teacher/reset?teacher_id=${teacherId}`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (res.ok) {
+                    showToast('Teacher allowance reset', 'success');
+                    loadTeacherAllowances();
+                } else {
+                    const error = await res.json();
+                    showToast(error.detail || 'Failed to reset allowance', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to reset allowance', 'error');
+            }
+        }
+        
+        async function resetAllTeacherAllowances() {
+            if (!confirm('Reset ALL teacher allowances to program defaults?')) return;
+            
+            try {
+                const res = await fetch(`${API_BASE.replace('/dashboard/api', '')}/admin/allowance/teacher/reset`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    showToast(`Reset allowances for ${data.teachers_affected} teachers`, 'success');
+                    loadTeacherAllowances();
+                } else {
+                    const error = await res.json();
+                    showToast(error.detail || 'Failed to reset allowances', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to reset allowances', 'error');
+            }
+        }
+
+        // ===== DAILY RESET =====
+        async function checkCronStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/cron/status`);
+                const data = await res.json();
+                
+                const statusText = document.getElementById('cronStatusText');
+                const statusBox = document.getElementById('cronStatusBox');
+                
+                if (data.status === 'ok') {
+                    statusText.innerHTML = `Last run today (${data.date}): ${data.student_allowances_set} students, ${data.teacher_allowances_set} teachers`;
+                    statusBox.className = 'info-box info-box-success mb-6';
+                } else if (data.status === 'not_run') {
+                    statusText.innerHTML = `Not yet run today (${data.date})`;
+                    statusBox.className = 'info-box info-box-warning mb-6';
+                } else {
+                    statusText.innerHTML = `Error: ${data.error || 'Unknown'}`;
+                    statusBox.className = 'info-box info-box-danger mb-6';
+                }
+            } catch (e) {
+                document.getElementById('cronStatusText').textContent = 'Unable to check status';
+            }
+        }
+        
+        async function runDailyReset() {
+            const programId = document.getElementById('resetProgramSelect').value;
+            if (!confirm(programId ? 'Reset allowances for this program?' : 'Reset allowances for ALL active programs?')) return;
+            
+            try {
+                let url = `${API_BASE}/cron/reset-allowances?secret=kaustcron2025`;
+                if (programId) url += `&program_id=${programId}`;
+                
+                const res = await fetch(url, { method: 'POST' });
+                const data = await res.json();
+                
+                const resultBox = document.getElementById('resetResultBox');
+                if (data.success) {
+                    resultBox.className = 'mt-4 p-4 rounded border border-green-300 bg-green-50 text-green-800';
+                    resultBox.innerHTML = `
+                        <div class="font-semibold mb-2"><i class="fa-solid fa-check-circle"></i> Reset Complete</div>
+                        <div>Programs processed: ${data.programs_processed}</div>
+                        <div>Students reset: ${data.students_reset}</div>
+                        <div>Teachers reset: ${data.teachers_reset}</div>
+                    `;
+                } else {
+                    resultBox.className = 'mt-4 p-4 rounded border border-red-300 bg-red-50 text-red-800';
+                    resultBox.innerHTML = `<i class="fa-solid fa-times-circle"></i> ${data.detail || 'Reset failed'}`;
+                }
+                resultBox.classList.remove('hidden');
+                
+                checkCronStatus();
+                showToast(data.message || 'Reset complete', data.success ? 'success' : 'error');
+            } catch (e) {
+                showToast('Failed to run daily reset', 'error');
+            }
+        }
+        
+        function loadResetProgramSelect() {
+            const select = document.getElementById('resetProgramSelect');
+            if (select && programs.length > 0) {
+                select.innerHTML = '<option value="">All Active Programs</option>' + 
+                    programs.filter(p => p.is_active !== false).map(p => `<option value="${p.program_id}">${p.name}</option>`).join('');
             }
         }
 

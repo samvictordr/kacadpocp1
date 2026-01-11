@@ -59,13 +59,13 @@ class TestResults:
 results = TestResults()
 
 
-async def test_health_check(client: httpx.AsyncClient):
+async def test_health_check(async_client: httpx.AsyncClient):
     """Test the health check endpoints."""
     print("\n[1/8] Health Check Tests")
     
     # Root endpoint
     try:
-        r = await client.get("/")
+        r = await async_client.get("/")
         data = r.json()
         if r.status_code == 200 and "status" in data:
             results.success("GET / returns status")
@@ -76,7 +76,7 @@ async def test_health_check(client: httpx.AsyncClient):
     
     # Health endpoint
     try:
-        r = await client.get("/health")
+        r = await async_client.get("/health")
         if r.status_code == 200:
             data = r.json()
             if data.get("status") == "healthy":
@@ -106,14 +106,14 @@ async def test_health_check(client: httpx.AsyncClient):
         results.failure("GET /health returns healthy", str(e))
 
 
-async def test_authentication(client: httpx.AsyncClient) -> Dict[str, str]:
+async def test_authentication(async_client: httpx.AsyncClient) -> Dict[str, str]:
     """Test authentication endpoints and return tokens."""
     print("\n[2/8] Authentication Tests")
     tokens = {}
     
     for role, creds in TEST_ACCOUNTS.items():
         try:
-            r = await client.post("/auth/login", json=creds)
+            r = await async_client.post("/auth/login", json=creds)
             if r.status_code == 200:
                 data = r.json()
                 if "access_token" in data:
@@ -128,7 +128,7 @@ async def test_authentication(client: httpx.AsyncClient) -> Dict[str, str]:
     
     # Test invalid login
     try:
-        r = await client.post("/auth/login", json={"email": "fake@test.com", "password": "wrong"})
+        r = await async_client.post("/auth/login", json={"email": "fake@test.com", "password": "wrong"})
         if r.status_code == 401:
             results.success("Invalid login rejected (401)")
         else:
@@ -139,7 +139,7 @@ async def test_authentication(client: httpx.AsyncClient) -> Dict[str, str]:
     # Test change password endpoint exists (don't actually change)
     if tokens.get("student"):
         try:
-            r = await client.post(
+            r = await async_client.post(
                 "/auth/change-password",
                 json={"current_password": "wrong", "new_password": "test"},
                 headers={"Authorization": f"Bearer {tokens['student']}"}
@@ -155,14 +155,14 @@ async def test_authentication(client: httpx.AsyncClient) -> Dict[str, str]:
     return tokens
 
 
-async def test_rbac(client: httpx.AsyncClient, tokens: Dict[str, str]):
+async def test_rbac(async_client: httpx.AsyncClient, tokens: Dict[str, str]):
     """Test Role-Based Access Control."""
     print("\n[3/8] RBAC Tests")
     
     # Student shouldn't access admin endpoints
     if tokens.get("student"):
         try:
-            r = await client.post(
+            r = await async_client.post(
                 "/admin/users/create",
                 json={"email": "test@test.com", "name": "Test", "role": "student", "password": "test123"},
                 headers={"Authorization": f"Bearer {tokens['student']}"}
@@ -177,7 +177,7 @@ async def test_rbac(client: httpx.AsyncClient, tokens: Dict[str, str]):
     # Teacher shouldn't access store endpoints
     if tokens.get("teacher"):
         try:
-            r = await client.post("/store/scan", 
+            r = await async_client.post("/store/scan", 
                                   json={"token": "test"},
                                   headers={"Authorization": f"Bearer {tokens['teacher']}"})
             if r.status_code in [401, 403]:
@@ -189,7 +189,7 @@ async def test_rbac(client: httpx.AsyncClient, tokens: Dict[str, str]):
     
     # Unauthenticated access should be blocked
     try:
-        r = await client.get("/student/balance")
+        r = await async_client.get("/student/balance")
         if r.status_code in [401, 403]:
             results.success("Unauthenticated requests blocked")
         else:
@@ -198,7 +198,7 @@ async def test_rbac(client: httpx.AsyncClient, tokens: Dict[str, str]):
         results.failure("Unauthenticated requests blocked", str(e))
 
 
-async def test_student_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]):
+async def test_student_endpoints(async_client: httpx.AsyncClient, tokens: Dict[str, str]):
     """Test student-specific endpoints."""
     print("\n[4/8] Student Endpoint Tests")
     
@@ -210,7 +210,7 @@ async def test_student_endpoints(client: httpx.AsyncClient, tokens: Dict[str, st
     
     # Get attendance QR code
     try:
-        r = await client.get("/student/attendance-qr", headers=headers)
+        r = await async_client.get("/student/attendance-qr", headers=headers)
         if r.status_code == 200:
             data = r.json()
             if "qr_token" in data or "token" in data:
@@ -227,7 +227,7 @@ async def test_student_endpoints(client: httpx.AsyncClient, tokens: Dict[str, st
     
     # Get student balance
     try:
-        r = await client.get("/student/balance", headers=headers)
+        r = await async_client.get("/student/balance", headers=headers)
         if r.status_code == 200:
             data = r.json()
             # API returns: student_id, date, base_amount, bonus_amount, total_amount, spent_today, remaining
@@ -245,7 +245,7 @@ async def test_student_endpoints(client: httpx.AsyncClient, tokens: Dict[str, st
     
     # Get store QR
     try:
-        r = await client.get("/student/store-qr", headers=headers)
+        r = await async_client.get("/student/store-qr", headers=headers)
         if r.status_code == 200:
             data = r.json()
             # API returns: student_id, date, balance
@@ -261,7 +261,7 @@ async def test_student_endpoints(client: httpx.AsyncClient, tokens: Dict[str, st
         results.failure("GET /student/store-qr", str(e))
 
 
-async def test_teacher_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]):
+async def test_teacher_endpoints(async_client: httpx.AsyncClient, tokens: Dict[str, str]):
     """Test teacher-specific endpoints."""
     print("\n[5/8] Teacher Endpoint Tests")
     
@@ -273,7 +273,7 @@ async def test_teacher_endpoints(client: httpx.AsyncClient, tokens: Dict[str, st
     
     # Get teacher's classes
     try:
-        r = await client.get("/teacher/classes", headers=headers)
+        r = await async_client.get("/teacher/classes", headers=headers)
         if r.status_code == 200:
             results.success("GET /teacher/classes")
         else:
@@ -283,7 +283,7 @@ async def test_teacher_endpoints(client: httpx.AsyncClient, tokens: Dict[str, st
     
     # Test start attendance session endpoint exists (with invalid class_id)
     try:
-        r = await client.post(
+        r = await async_client.post(
             "/teacher/attendance-session/start",
             json={"class_id": "00000000-0000-0000-0000-000000000000", "mode": "qr"},
             headers=headers
@@ -297,7 +297,7 @@ async def test_teacher_endpoints(client: httpx.AsyncClient, tokens: Dict[str, st
         results.failure("POST /teacher/attendance-session/start endpoint exists", str(e))
 
 
-async def test_store_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]):
+async def test_store_endpoints(async_client: httpx.AsyncClient, tokens: Dict[str, str]):
     """Test store-specific endpoints."""
     print("\n[6/8] Store Endpoint Tests")
     
@@ -309,7 +309,7 @@ async def test_store_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]
     
     # Test scan with invalid student_id (should fail gracefully)
     try:
-        r = await client.post("/store/scan", 
+        r = await async_client.post("/store/scan", 
                               json={"student_id": "00000000-0000-0000-0000-000000000000"},
                               headers=headers)
         if r.status_code in [400, 404]:
@@ -323,7 +323,7 @@ async def test_store_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]
     
     # Test charge with invalid student_id
     try:
-        r = await client.post("/store/charge",
+        r = await async_client.post("/store/charge",
                               json={"student_id": "00000000-0000-0000-0000-000000000000", "amount": 10, "location": "test"},
                               headers=headers)
         if r.status_code in [400, 404]:
@@ -336,7 +336,7 @@ async def test_store_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]
         results.failure("POST /store/charge rejects invalid student_id", str(e))
 
 
-async def test_admin_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]):
+async def test_admin_endpoints(async_client: httpx.AsyncClient, tokens: Dict[str, str]):
     """Test admin-specific endpoints."""
     print("\n[7/8] Admin Endpoint Tests")
     
@@ -348,7 +348,7 @@ async def test_admin_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]
     
     # Test create user endpoint (with invalid data to just verify it exists)
     try:
-        r = await client.post(
+        r = await async_client.post(
             "/admin/users/create",
             json={"email": "test-exists@test.com", "name": "Test", "role": "student", "password": "test123"},
             headers=headers
@@ -364,7 +364,7 @@ async def test_admin_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]
     
     # Test allowance reset endpoint
     try:
-        r = await client.post(
+        r = await async_client.post(
             "/admin/allowance/reset",
             json={"reset_date": str(date.today())},
             headers=headers
@@ -379,7 +379,7 @@ async def test_admin_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]
     
     # Test allowance bump endpoint
     try:
-        r = await client.post(
+        r = await async_client.post(
             "/admin/allowance/bump",
             json={"student_id": "00000000-0000-0000-0000-000000000000", "amount": 10},
             headers=headers
@@ -392,13 +392,13 @@ async def test_admin_endpoints(client: httpx.AsyncClient, tokens: Dict[str, str]
         results.failure("POST /admin/allowance/bump endpoint exists", str(e))
 
 
-async def test_api_contracts(client: httpx.AsyncClient, tokens: Dict[str, str]):
+async def test_api_contracts(async_client: httpx.AsyncClient, tokens: Dict[str, str]):
     """Test API response contracts."""
     print("\n[8/8] API Contract Tests")
     
     # Test error response format
     try:
-        r = await client.get("/nonexistent-endpoint")
+        r = await async_client.get("/nonexistent-endpoint")
         if r.status_code == 404:
             results.success("404 for unknown endpoints")
         else:
@@ -408,7 +408,7 @@ async def test_api_contracts(client: httpx.AsyncClient, tokens: Dict[str, str]):
     
     # Test content-type is JSON
     try:
-        r = await client.get("/")
+        r = await async_client.get("/")
         if "application/json" in r.headers.get("content-type", ""):
             results.success("Response Content-Type is JSON")
         else:
@@ -418,7 +418,7 @@ async def test_api_contracts(client: httpx.AsyncClient, tokens: Dict[str, str]):
     
     # Test CORS headers
     try:
-        r = await client.options("/", headers={"Origin": "https://test.com"})
+        r = await async_client.options("/", headers={"Origin": "https://test.com"})
         # CORS preflight should work
         if r.status_code in [200, 204, 405]:
             results.success("CORS preflight handled")

@@ -177,3 +177,130 @@ async def bump_allowance(
         new_total=new_total,
         message=message
     )
+
+
+@router.post(
+    "/allowance/reset-program",
+    responses={400: {"model": ErrorResponse}}
+)
+async def reset_program_allowances(
+    program_id: str = None,
+    current_user: TokenPayload = Depends(require_admin),
+    pg: AsyncSession = Depends(get_postgres_session),
+    redis: RedisClient = Depends(get_redis)
+):
+    """
+    Reset daily allowances for all active students and teachers in active programs.
+    Uses each program's default_daily_allowance value.
+    If program_id is provided, only resets that program.
+    This is designed to be called daily by a cron job or scheduler.
+    """
+    service = AllowanceService(pg, redis)
+    
+    result = await service.reset_program_allowances(
+        admin_id=current_user.user_id,
+        program_id=program_id
+    )
+    
+    return {
+        "success": True,
+        **result,
+        "message": f"Reset allowances for {result['students_reset']} students and {result['teachers_reset']} teachers across {result['programs_processed']} programs"
+    }
+
+
+@router.post(
+    "/allowance/teacher/reset",
+    responses={400: {"model": ErrorResponse}}
+)
+async def reset_teacher_allowance(
+    teacher_id: str = None,
+    base_amount: float = None,
+    current_user: TokenPayload = Depends(require_admin),
+    pg: AsyncSession = Depends(get_postgres_session),
+    redis: RedisClient = Depends(get_redis)
+):
+    """
+    Reset allowance for a single teacher or all teachers.
+    """
+    from decimal import Decimal
+    
+    service = AllowanceService(pg, redis)
+    
+    if teacher_id:
+        success, message = await service.reset_single_teacher_allowance(
+            admin_id=current_user.user_id,
+            teacher_id=teacher_id,
+            base_amount=Decimal(str(base_amount)) if base_amount else None
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=message
+            )
+        
+        return {
+            "success": True,
+            "teachers_affected": 1,
+            "date": str(date.today()),
+            "message": message
+        }
+    else:
+        # Reset all teachers
+        teachers = await service.get_all_active_teachers()
+        count = 0
+        amount = Decimal(str(base_amount)) if base_amount else None
+        
+        for teacher in teachers:
+            await service.reset_allowance_for_teacher(
+                teacher=teacher,
+                base_amount=amount,
+                admin_id=current_user.user_id
+            )
+            count += 1
+        
+        return {
+            "success": True,
+            "teachers_affected": count,
+            "date": str(date.today()),
+            "message": f"Reset allowances for {count} teachers"
+        }
+
+
+@router.post(
+    "/allowance/teacher/bump",
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}}
+)
+async def bump_teacher_allowance(
+    teacher_id: str,
+    bonus_amount: float,
+    current_user: TokenPayload = Depends(require_admin),
+    pg: AsyncSession = Depends(get_postgres_session),
+    redis: RedisClient = Depends(get_redis)
+):
+    """
+    Add bonus amount to a teacher's daily allowance.
+    """
+    from decimal import Decimal
+    
+    service = AllowanceService(pg, redis)
+    
+    success, message, new_total = await service.bump_teacher_allowance(
+        admin_id=current_user.user_id,
+        teacher_id=teacher_id,
+        bonus_amount=Decimal(str(bonus_amount))
+    )
+    
+    if not success:
+        status_code = status.HTTP_400_BAD_REQUEST
+        if "not found" in message.lower():
+            status_code = status.HTTP_404_NOT_FOUND
+        raise HTTPException(status_code=status_code, detail=message)
+    
+    return {
+        "success": True,
+        "teacher_id": teacher_id,
+        "new_total": float(new_total) if new_total else None,
+        "message": message
+    }
