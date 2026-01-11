@@ -2127,12 +2127,12 @@ async def get_diner_sales_summary(period: str = "today"):
             result = await session.execute(text("""
                 SELECT 
                     COUNT(*) as transaction_count,
-                    COALESCE(SUM(total_amount), 0) as total_sales,
-                    COALESCE(AVG(total_amount), 0) as avg_transaction,
-                    COALESCE(MAX(total_amount), 0) as max_transaction
+                    COALESCE(SUM(amount), 0) as total_sales,
+                    COALESCE(AVG(amount), 0) as avg_transaction,
+                    COALESCE(MAX(amount), 0) as max_transaction
                 FROM store_transactions 
-                WHERE DATE(transaction_time) >= :start_date 
-                AND DATE(transaction_time) <= :end_date
+                WHERE DATE(created_at) >= :start_date 
+                AND DATE(created_at) <= :end_date
             """), {"start_date": start_date, "end_date": end_date})
             student_stats = result.fetchone()
             
@@ -2142,8 +2142,8 @@ async def get_diner_sales_summary(period: str = "today"):
                     COUNT(*) as transaction_count,
                     COALESCE(SUM(amount), 0) as total_sales
                 FROM teacher_meal_transactions 
-                WHERE DATE(transaction_time) >= :start_date 
-                AND DATE(transaction_time) <= :end_date
+                WHERE DATE(created_at) >= :start_date 
+                AND DATE(created_at) <= :end_date
             """), {"start_date": start_date, "end_date": end_date})
             teacher_stats = result.fetchone()
             
@@ -2182,12 +2182,12 @@ async def get_hourly_breakdown(date_str: str = None):
         async with async_session_factory() as session:
             result = await session.execute(text("""
                 SELECT 
-                    EXTRACT(HOUR FROM transaction_time) as hour,
+                    EXTRACT(HOUR FROM created_at) as hour,
                     COUNT(*) as transaction_count,
-                    COALESCE(SUM(total_amount), 0) as total_sales
+                    COALESCE(SUM(amount), 0) as total_sales
                 FROM store_transactions 
-                WHERE DATE(transaction_time) = :target_date
-                GROUP BY EXTRACT(HOUR FROM transaction_time)
+                WHERE DATE(created_at) = :target_date
+                GROUP BY EXTRACT(HOUR FROM created_at)
                 ORDER BY hour
             """), {"target_date": target_date})
             rows = result.fetchall()
@@ -2218,13 +2218,13 @@ async def get_recent_transactions(limit: int = 50):
             result = await session.execute(text("""
                 SELECT 
                     st.transaction_id,
-                    st.total_amount,
-                    st.transaction_time,
+                    st.amount,
+                    st.created_at,
                     s.full_name as customer_name,
                     'student' as customer_type
                 FROM store_transactions st
                 JOIN students s ON st.student_id = s.student_id
-                ORDER BY st.transaction_time DESC
+                ORDER BY st.created_at DESC
                 LIMIT :limit
             """), {"limit": limit})
             student_txns = result.fetchall()
@@ -2233,13 +2233,13 @@ async def get_recent_transactions(limit: int = 50):
             result = await session.execute(text("""
                 SELECT 
                     tmt.transaction_id,
-                    tmt.amount as total_amount,
-                    tmt.transaction_time,
+                    tmt.amount,
+                    tmt.created_at,
                     t.full_name as customer_name,
                     'teacher' as customer_type
                 FROM teacher_meal_transactions tmt
                 JOIN teachers t ON tmt.teacher_id = t.teacher_id
-                ORDER BY tmt.transaction_time DESC
+                ORDER BY tmt.created_at DESC
                 LIMIT :limit
             """), {"limit": limit})
             teacher_txns = result.fetchall()
@@ -2286,14 +2286,14 @@ async def get_eod_report(date_str: str = None):
             result = await session.execute(text("""
                 SELECT 
                     COUNT(*) as txn_count,
-                    COALESCE(SUM(total_amount), 0) as total,
-                    COALESCE(MIN(total_amount), 0) as min_txn,
-                    COALESCE(MAX(total_amount), 0) as max_txn,
-                    COALESCE(AVG(total_amount), 0) as avg_txn,
-                    MIN(transaction_time) as first_txn,
-                    MAX(transaction_time) as last_txn
+                    COALESCE(SUM(amount), 0) as total,
+                    COALESCE(MIN(amount), 0) as min_txn,
+                    COALESCE(MAX(amount), 0) as max_txn,
+                    COALESCE(AVG(amount), 0) as avg_txn,
+                    MIN(created_at) as first_txn,
+                    MAX(created_at) as last_txn
                 FROM store_transactions 
-                WHERE DATE(transaction_time) = :target_date
+                WHERE DATE(created_at) = :target_date
             """), {"target_date": target_date})
             student_stats = result.fetchone()
             
@@ -2302,23 +2302,23 @@ async def get_eod_report(date_str: str = None):
                 SELECT 
                     COUNT(*) as txn_count,
                     COALESCE(SUM(amount), 0) as total,
-                    MIN(transaction_time) as first_txn,
-                    MAX(transaction_time) as last_txn
+                    MIN(created_at) as first_txn,
+                    MAX(created_at) as last_txn
                 FROM teacher_meal_transactions 
-                WHERE DATE(transaction_time) = :target_date
+                WHERE DATE(created_at) = :target_date
             """), {"target_date": target_date})
             teacher_stats = result.fetchone()
             
             # Unique customers served
             result = await session.execute(text("""
                 SELECT COUNT(DISTINCT student_id) FROM store_transactions 
-                WHERE DATE(transaction_time) = :target_date
+                WHERE DATE(created_at) = :target_date
             """), {"target_date": target_date})
             unique_students = result.scalar() or 0
             
             result = await session.execute(text("""
                 SELECT COUNT(DISTINCT teacher_id) FROM teacher_meal_transactions 
-                WHERE DATE(transaction_time) = :target_date
+                WHERE DATE(created_at) = :target_date
             """), {"target_date": target_date})
             unique_teachers = result.scalar() or 0
             
@@ -2371,18 +2371,18 @@ async def get_weekly_comparison():
         async with async_session_factory() as session:
             # This week
             result = await session.execute(text("""
-                SELECT COUNT(*), COALESCE(SUM(total_amount), 0)
+                SELECT COUNT(*), COALESCE(SUM(amount), 0)
                 FROM store_transactions 
-                WHERE DATE(transaction_time) >= :start_date
+                WHERE DATE(created_at) >= :start_date
             """), {"start_date": this_week_start})
             this_week = result.fetchone()
             
             # Last week
             result = await session.execute(text("""
-                SELECT COUNT(*), COALESCE(SUM(total_amount), 0)
+                SELECT COUNT(*), COALESCE(SUM(amount), 0)
                 FROM store_transactions 
-                WHERE DATE(transaction_time) >= :start_date 
-                AND DATE(transaction_time) <= :end_date
+                WHERE DATE(created_at) >= :start_date 
+                AND DATE(created_at) <= :end_date
             """), {"start_date": last_week_start, "end_date": last_week_end})
             last_week = result.fetchone()
             
