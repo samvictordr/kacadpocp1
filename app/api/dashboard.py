@@ -410,7 +410,9 @@ async def create_user(data: dict):
                     raise HTTPException(status_code=400, detail="Phone number already registered")
             
         user_id = str(uuid.uuid4())
-        password_hash = hash_password(data.get("password", "temp123"))
+        # Use temp123 as default if password is empty or not provided
+        password = data.get("password", "").strip() or "temp123"
+        password_hash = hash_password(password)
         
         await mongodb.db.users.insert_one({
             "_id": user_id,
@@ -2091,6 +2093,326 @@ async def bump_teacher_allowance(teacher_id: str, bonus_amount: float):
             }
     except HTTPException:
         raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== DINER DASHBOARD APIs ====================
+
+@router.get("/api/diner/sales-summary")
+async def get_diner_sales_summary(period: str = "today"):
+    """Get sales summary for diner dashboard."""
+    from datetime import date, timedelta
+    
+    try:
+        async with async_session_factory() as session:
+            # Determine date range
+            today = date.today()
+            if period == "today":
+                start_date = today
+                end_date = today
+            elif period == "week":
+                start_date = today - timedelta(days=7)
+                end_date = today
+            elif period == "month":
+                start_date = today - timedelta(days=30)
+                end_date = today
+            else:
+                start_date = today
+                end_date = today
+            
+            # Get student transactions
+            result = await session.execute(text("""
+                SELECT 
+                    COUNT(*) as transaction_count,
+                    COALESCE(SUM(total_amount), 0) as total_sales,
+                    COALESCE(AVG(total_amount), 0) as avg_transaction,
+                    COALESCE(MAX(total_amount), 0) as max_transaction
+                FROM store_transactions 
+                WHERE DATE(transaction_time) >= :start_date 
+                AND DATE(transaction_time) <= :end_date
+            """), {"start_date": start_date, "end_date": end_date})
+            student_stats = result.fetchone()
+            
+            # Get teacher transactions
+            result = await session.execute(text("""
+                SELECT 
+                    COUNT(*) as transaction_count,
+                    COALESCE(SUM(amount), 0) as total_sales
+                FROM teacher_meal_transactions 
+                WHERE DATE(transaction_time) >= :start_date 
+                AND DATE(transaction_time) <= :end_date
+            """), {"start_date": start_date, "end_date": end_date})
+            teacher_stats = result.fetchone()
+            
+            return {
+                "period": period,
+                "date_range": {"start": str(start_date), "end": str(end_date)},
+                "students": {
+                    "transactions": student_stats[0] if student_stats else 0,
+                    "total_sales": float(student_stats[1]) if student_stats else 0,
+                    "avg_transaction": round(float(student_stats[2]), 2) if student_stats else 0,
+                    "max_transaction": float(student_stats[3]) if student_stats else 0
+                },
+                "teachers": {
+                    "transactions": teacher_stats[0] if teacher_stats else 0,
+                    "total_sales": float(teacher_stats[1]) if teacher_stats else 0
+                },
+                "combined": {
+                    "transactions": (student_stats[0] if student_stats else 0) + (teacher_stats[0] if teacher_stats else 0),
+                    "total_sales": (float(student_stats[1]) if student_stats else 0) + (float(teacher_stats[1]) if teacher_stats else 0)
+                }
+            }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/diner/hourly-breakdown")
+async def get_hourly_breakdown(date_str: str = None):
+    """Get hourly sales breakdown for a specific date."""
+    from datetime import date, datetime
+    
+    try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else date.today()
+        
+        async with async_session_factory() as session:
+            result = await session.execute(text("""
+                SELECT 
+                    EXTRACT(HOUR FROM transaction_time) as hour,
+                    COUNT(*) as transaction_count,
+                    COALESCE(SUM(total_amount), 0) as total_sales
+                FROM store_transactions 
+                WHERE DATE(transaction_time) = :target_date
+                GROUP BY EXTRACT(HOUR FROM transaction_time)
+                ORDER BY hour
+            """), {"target_date": target_date})
+            rows = result.fetchall()
+            
+            # Create full 24-hour breakdown
+            hourly = {i: {"transactions": 0, "sales": 0} for i in range(24)}
+            for row in rows:
+                hour = int(row[0])
+                hourly[hour] = {"transactions": row[1], "sales": float(row[2])}
+            
+            return {
+                "date": str(target_date),
+                "hourly": hourly,
+                "peak_hour": max(hourly.items(), key=lambda x: x[1]["transactions"])[0] if rows else None
+            }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/diner/recent-transactions")
+async def get_recent_transactions(limit: int = 50):
+    """Get recent transactions for diner dashboard."""
+    try:
+        async with async_session_factory() as session:
+            # Get recent student transactions
+            result = await session.execute(text("""
+                SELECT 
+                    st.transaction_id,
+                    st.total_amount,
+                    st.transaction_time,
+                    s.full_name as customer_name,
+                    'student' as customer_type
+                FROM store_transactions st
+                JOIN students s ON st.student_id = s.student_id
+                ORDER BY st.transaction_time DESC
+                LIMIT :limit
+            """), {"limit": limit})
+            student_txns = result.fetchall()
+            
+            # Get recent teacher transactions
+            result = await session.execute(text("""
+                SELECT 
+                    tmt.transaction_id,
+                    tmt.amount as total_amount,
+                    tmt.transaction_time,
+                    t.full_name as customer_name,
+                    'teacher' as customer_type
+                FROM teacher_meal_transactions tmt
+                JOIN teachers t ON tmt.teacher_id = t.teacher_id
+                ORDER BY tmt.transaction_time DESC
+                LIMIT :limit
+            """), {"limit": limit})
+            teacher_txns = result.fetchall()
+            
+            # Combine and sort
+            all_txns = []
+            for t in student_txns:
+                all_txns.append({
+                    "id": str(t[0]),
+                    "amount": float(t[1]),
+                    "time": t[2].isoformat() if t[2] else None,
+                    "customer": t[3],
+                    "type": t[4]
+                })
+            for t in teacher_txns:
+                all_txns.append({
+                    "id": str(t[0]),
+                    "amount": float(t[1]),
+                    "time": t[2].isoformat() if t[2] else None,
+                    "customer": t[3],
+                    "type": t[4]
+                })
+            
+            # Sort by time descending
+            all_txns.sort(key=lambda x: x["time"] or "", reverse=True)
+            
+            return {"transactions": all_txns[:limit]}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/diner/eod-report")
+async def get_eod_report(date_str: str = None):
+    """Generate End of Day report for a specific date."""
+    from datetime import date, datetime
+    
+    try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else date.today()
+        
+        async with async_session_factory() as session:
+            # Student sales
+            result = await session.execute(text("""
+                SELECT 
+                    COUNT(*) as txn_count,
+                    COALESCE(SUM(total_amount), 0) as total,
+                    COALESCE(MIN(total_amount), 0) as min_txn,
+                    COALESCE(MAX(total_amount), 0) as max_txn,
+                    COALESCE(AVG(total_amount), 0) as avg_txn,
+                    MIN(transaction_time) as first_txn,
+                    MAX(transaction_time) as last_txn
+                FROM store_transactions 
+                WHERE DATE(transaction_time) = :target_date
+            """), {"target_date": target_date})
+            student_stats = result.fetchone()
+            
+            # Teacher sales
+            result = await session.execute(text("""
+                SELECT 
+                    COUNT(*) as txn_count,
+                    COALESCE(SUM(amount), 0) as total,
+                    MIN(transaction_time) as first_txn,
+                    MAX(transaction_time) as last_txn
+                FROM teacher_meal_transactions 
+                WHERE DATE(transaction_time) = :target_date
+            """), {"target_date": target_date})
+            teacher_stats = result.fetchone()
+            
+            # Unique customers served
+            result = await session.execute(text("""
+                SELECT COUNT(DISTINCT student_id) FROM store_transactions 
+                WHERE DATE(transaction_time) = :target_date
+            """), {"target_date": target_date})
+            unique_students = result.scalar() or 0
+            
+            result = await session.execute(text("""
+                SELECT COUNT(DISTINCT teacher_id) FROM teacher_meal_transactions 
+                WHERE DATE(transaction_time) = :target_date
+            """), {"target_date": target_date})
+            unique_teachers = result.scalar() or 0
+            
+            student_total = float(student_stats[1]) if student_stats else 0
+            teacher_total = float(teacher_stats[1]) if teacher_stats else 0
+            
+            return {
+                "date": str(target_date),
+                "generated_at": datetime.now().isoformat(),
+                "summary": {
+                    "total_sales": student_total + teacher_total,
+                    "total_transactions": (student_stats[0] if student_stats else 0) + (teacher_stats[0] if teacher_stats else 0),
+                    "unique_customers": unique_students + unique_teachers
+                },
+                "student_sales": {
+                    "transactions": student_stats[0] if student_stats else 0,
+                    "total": student_total,
+                    "min": float(student_stats[2]) if student_stats else 0,
+                    "max": float(student_stats[3]) if student_stats else 0,
+                    "avg": round(float(student_stats[4]), 2) if student_stats else 0,
+                    "first_transaction": student_stats[5].isoformat() if student_stats and student_stats[5] else None,
+                    "last_transaction": student_stats[6].isoformat() if student_stats and student_stats[6] else None,
+                    "unique_customers": unique_students
+                },
+                "teacher_sales": {
+                    "transactions": teacher_stats[0] if teacher_stats else 0,
+                    "total": teacher_total,
+                    "first_transaction": teacher_stats[2].isoformat() if teacher_stats and teacher_stats[2] else None,
+                    "last_transaction": teacher_stats[3].isoformat() if teacher_stats and teacher_stats[3] else None,
+                    "unique_customers": unique_teachers
+                }
+            }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/diner/weekly-comparison")
+async def get_weekly_comparison():
+    """Compare this week's sales to last week."""
+    from datetime import date, timedelta
+    
+    try:
+        today = date.today()
+        this_week_start = today - timedelta(days=today.weekday())  # Monday
+        last_week_start = this_week_start - timedelta(days=7)
+        last_week_end = this_week_start - timedelta(days=1)
+        
+        async with async_session_factory() as session:
+            # This week
+            result = await session.execute(text("""
+                SELECT COUNT(*), COALESCE(SUM(total_amount), 0)
+                FROM store_transactions 
+                WHERE DATE(transaction_time) >= :start_date
+            """), {"start_date": this_week_start})
+            this_week = result.fetchone()
+            
+            # Last week
+            result = await session.execute(text("""
+                SELECT COUNT(*), COALESCE(SUM(total_amount), 0)
+                FROM store_transactions 
+                WHERE DATE(transaction_time) >= :start_date 
+                AND DATE(transaction_time) <= :end_date
+            """), {"start_date": last_week_start, "end_date": last_week_end})
+            last_week = result.fetchone()
+            
+            this_week_sales = float(this_week[1]) if this_week else 0
+            last_week_sales = float(last_week[1]) if last_week else 0
+            
+            # Calculate change percentage
+            if last_week_sales > 0:
+                change_pct = round(((this_week_sales - last_week_sales) / last_week_sales) * 100, 1)
+            else:
+                change_pct = 100 if this_week_sales > 0 else 0
+            
+            return {
+                "this_week": {
+                    "start": str(this_week_start),
+                    "transactions": this_week[0] if this_week else 0,
+                    "sales": this_week_sales
+                },
+                "last_week": {
+                    "start": str(last_week_start),
+                    "end": str(last_week_end),
+                    "transactions": last_week[0] if last_week else 0,
+                    "sales": last_week_sales
+                },
+                "change": {
+                    "sales_diff": round(this_week_sales - last_week_sales, 2),
+                    "percentage": change_pct,
+                    "trend": "up" if change_pct > 0 else ("down" if change_pct < 0 else "flat")
+                }
+            }
     except Exception as e:
         import traceback
         traceback.print_exc()
