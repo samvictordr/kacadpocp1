@@ -657,14 +657,14 @@ async def reset_user_password(user_id: str, data: dict = None):
         await mongodb.db.users.update_one(
             {"user_id": user_id},
             {"$set": {
-                "password_hash": password_hash,
-                "password_last_changed": datetime.utcnow()
+                "auth.password_hash": password_hash,
+                "auth.password_last_changed": datetime.utcnow()
             }}
         )
         
         return {
             "success": True,
-            "message": f"Password reset successfully for {user.get('full_name', 'user')}",
+            "message": f"Password reset successfully for {user.get('name', user.get('full_name', 'user'))}",
             "reset_to_default": new_password == "temp123"
         }
     except HTTPException:
