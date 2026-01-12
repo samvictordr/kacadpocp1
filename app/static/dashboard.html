@@ -1504,9 +1504,10 @@ Dr. Fatima Al-Saud,fatima@academy.edu
                 tbody.innerHTML = students.map(s => {
                     const programClasses = classesByProgram[s.program_id] || [];
                     const classOptions = programClasses.length > 0 
-                        ? `<option value="">No class</option>` + programClasses.map(c => 
-                            `<option value="${c.class_id}" ${c.class_id === s.class_id ? 'selected' : ''}>${c.name}</option>`
-                          ).join('')
+                        ? `<option value="">No class</option>` + programClasses.map(c => {
+                            const teacherLabel = c.teacher_name ? ` (${c.teacher_name})` : '';
+                            return `<option value="${c.class_id}" ${c.class_id === s.class_id ? 'selected' : ''}>${c.name}${teacherLabel}</option>`;
+                          }).join('')
                         : `<option value="">No classes available</option>`;
                     
                     return `
@@ -2260,7 +2261,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu
                     throw new Error(err.detail || 'Failed to update class');
                 }
                 
-                showNotification('Class updated successfully', 'success');
+                showToast('Class updated successfully', 'success');
                 
                 // Update local data
                 const student = students.find(s => s.student_id === studentId);
@@ -2269,7 +2270,7 @@ Dr. Fatima Al-Saud,fatima@academy.edu
                 }
             } catch (e) {
                 console.error('Change class failed:', e);
-                showNotification('Failed to update class: ' + e.message, 'error');
+                showToast('Failed to update class: ' + e.message, 'error');
                 loadStudents(); // Reload to reset dropdown
             }
         }
@@ -2277,12 +2278,12 @@ Dr. Fatima Al-Saud,fatima@academy.edu
         async function applyBulkClassChange() {
             const classId = document.getElementById('bulkClassSelect').value;
             if (!classId) {
-                showNotification('Please select a class', 'error');
+                showToast('Please select a class', 'error');
                 return;
             }
             
             if (selectedStudentIds.size === 0) {
-                showNotification('No students selected', 'error');
+                showToast('No students selected', 'error');
                 return;
             }
             
@@ -2301,13 +2302,13 @@ Dr. Fatima Al-Saud,fatima@academy.edu
                 }
                 
                 const result = await res.json();
-                showNotification(`Updated class for ${result.updated_count} students`, 'success');
+                showToast(`Updated class for ${result.updated_count} students`, 'success');
                 
                 // Reload students to reflect changes
                 await loadStudents();
             } catch (e) {
                 console.error('Bulk class change failed:', e);
-                showNotification('Failed to update classes: ' + e.message, 'error');
+                showToast('Failed to update classes: ' + e.message, 'error');
             }
         }
         

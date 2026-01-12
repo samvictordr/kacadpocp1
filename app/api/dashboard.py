@@ -407,7 +407,7 @@ async def get_classes_by_program(program_id: str):
             result = await session.execute(text("""
                 SELECT c.class_id, c.name, c.teacher_id, c.active, t.full_name as teacher_name
                 FROM classes c
-                LEFT JOIN teachers t ON c.teacher_id = t.teacher_id
+                LEFT JOIN teachers t ON c.teacher_id = t.user_id
                 WHERE c.program_id = :program_id AND c.active = true
                 ORDER BY c.name
             """), {"program_id": program_id})
@@ -1099,21 +1099,9 @@ async def create_class(data: dict):
 
 @router.delete("/api/classes/{class_id}")
 async def delete_class(class_id: str):
-    """Delete a class."""
+    """Delete a class (including any enrollments)."""
     try:
         async with async_session_factory() as session:
-            # Check for enrollments
-            result = await session.execute(text(
-                "SELECT COUNT(*) FROM class_enrollments WHERE class_id = :class_id"
-            ), {"class_id": class_id})
-            enrollment_count = result.scalar()
-            
-            if enrollment_count > 0:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Cannot delete class with {enrollment_count} enrolled students. Remove enrollments first."
-                )
-            
             # Check for attendance sessions
             result = await session.execute(text(
                 "SELECT COUNT(*) FROM attendance_sessions WHERE class_id = :class_id"
@@ -1126,6 +1114,12 @@ async def delete_class(class_id: str):
                     detail=f"Cannot delete class with {session_count} attendance sessions. Archive it instead."
                 )
             
+            # Delete enrollments first
+            await session.execute(text(
+                "DELETE FROM class_enrollments WHERE class_id = :class_id"
+            ), {"class_id": class_id})
+            
+            # Delete the class
             await session.execute(text(
                 "DELETE FROM classes WHERE class_id = :class_id"
             ), {"class_id": class_id})
