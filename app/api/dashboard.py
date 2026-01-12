@@ -293,18 +293,126 @@ async def get_all_users(role: Optional[str] = None):
 
 @router.get("/api/students")
 async def get_all_students():
-    """Get all students."""
+    """Get all students with their class enrollments."""
     try:
         async with async_session_factory() as session:
             result = await session.execute(text("""
                 SELECT s.student_id, s.user_id, s.full_name, s.phone_number,
-                       s.program_id, s.is_active, p.name as program_name
+                       s.program_id, s.is_active, p.name as program_name,
+                       c.class_id, c.name as class_name
                 FROM students s
                 LEFT JOIN programs p ON s.program_id = p.program_id
+                LEFT JOIN class_enrollments ce ON s.student_id = ce.student_id
+                LEFT JOIN classes c ON ce.class_id = c.class_id
                 ORDER BY s.full_name
             """))
             rows = result.fetchall()
-            columns = ["student_id", "user_id", "full_name", "phone_number", "program_id", "is_active", "program_name"]
+            columns = ["student_id", "user_id", "full_name", "phone_number", "program_id", "is_active", "program_name", "class_id", "class_name"]
+            return [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/api/students/{student_id}/class")
+async def update_student_class(student_id: str, data: dict):
+    """Update the class enrollment for a student."""
+    try:
+        class_id = data.get("class_id")
+        
+        async with async_session_factory() as session:
+            # Verify student exists
+            result = await session.execute(text(
+                "SELECT student_id FROM students WHERE student_id = :student_id"
+            ), {"student_id": student_id})
+            if not result.scalar():
+                raise HTTPException(status_code=404, detail="Student not found")
+            
+            # Remove existing class enrollments for this student
+            await session.execute(text(
+                "DELETE FROM class_enrollments WHERE student_id = :student_id"
+            ), {"student_id": student_id})
+            
+            # Add new enrollment if class_id provided
+            if class_id:
+                # Verify class exists
+                result = await session.execute(text(
+                    "SELECT class_id FROM classes WHERE class_id = :class_id"
+                ), {"class_id": class_id})
+                if not result.scalar():
+                    raise HTTPException(status_code=404, detail="Class not found")
+                
+                await session.execute(text("""
+                    INSERT INTO class_enrollments (class_id, student_id)
+                    VALUES (:class_id, :student_id)
+                """), {"class_id": class_id, "student_id": student_id})
+            
+            await session.commit()
+            return {"success": True, "message": "Class enrollment updated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/students/bulk-class-change")
+async def bulk_change_student_classes(data: dict):
+    """Bulk change class enrollment for multiple students."""
+    try:
+        student_ids = data.get("student_ids", [])
+        class_id = data.get("class_id")
+        
+        if not student_ids:
+            raise HTTPException(status_code=400, detail="No students selected")
+        
+        async with async_session_factory() as session:
+            # Verify class exists if provided
+            if class_id:
+                result = await session.execute(text(
+                    "SELECT class_id, program_id FROM classes WHERE class_id = :class_id"
+                ), {"class_id": class_id})
+                class_row = result.fetchone()
+                if not class_row:
+                    raise HTTPException(status_code=404, detail="Class not found")
+            
+            updated = 0
+            for student_id in student_ids:
+                # Remove existing enrollments
+                await session.execute(text(
+                    "DELETE FROM class_enrollments WHERE student_id = :student_id"
+                ), {"student_id": student_id})
+                
+                # Add new enrollment if class_id provided
+                if class_id:
+                    await session.execute(text("""
+                        INSERT INTO class_enrollments (class_id, student_id)
+                        VALUES (:class_id, :student_id)
+                        ON CONFLICT (class_id, student_id) DO NOTHING
+                    """), {"class_id": class_id, "student_id": student_id})
+                updated += 1
+            
+            await session.commit()
+            action = f"enrolled in class" if class_id else "removed from all classes"
+            return {"success": True, "message": f"{updated} students {action}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/classes/by-program/{program_id}")
+async def get_classes_by_program(program_id: str):
+    """Get all classes for a specific program."""
+    try:
+        async with async_session_factory() as session:
+            result = await session.execute(text("""
+                SELECT c.class_id, c.name, c.teacher_id, c.active, t.full_name as teacher_name
+                FROM classes c
+                LEFT JOIN teachers t ON c.teacher_id = t.teacher_id
+                WHERE c.program_id = :program_id AND c.active = true
+                ORDER BY c.name
+            """), {"program_id": program_id})
+            rows = result.fetchall()
+            columns = ["class_id", "name", "teacher_id", "active", "teacher_name"]
             return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
