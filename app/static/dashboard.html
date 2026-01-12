@@ -1522,6 +1522,8 @@ Dr. Fatima Al-Saud,fatima@academy.edu
                         </td>
                         <td><span class="badge ${s.is_active ? 'badge-success' : 'badge-danger'}">${s.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td>
+                            <button onclick="resetUserPassword('${s.user_id}', '${s.full_name}')" class="action-link" style="color: #f59e0b;">Reset Pwd</button>
+                            <span class="text-enterprise-300 mx-2">|</span>
                             <button onclick="toggleUserStatus('${s.user_id}', ${!s.is_active})" class="action-link action-link-primary">${s.is_active ? 'Deactivate' : 'Activate'}</button>
                             <span class="text-enterprise-300 mx-2">|</span>
                             <button onclick="deleteUser('${s.user_id}')" class="action-link action-link-danger">Delete</button>
@@ -1549,6 +1551,8 @@ Dr. Fatima Al-Saud,fatima@academy.edu
                         <td>${t.program_name || '—'}</td>
                         <td><span class="badge ${t.is_active ? 'badge-success' : 'badge-danger'}">${t.is_active ? 'Active' : 'Inactive'}</span></td>
                         <td>
+                            <button onclick="resetUserPassword('${t.user_id}', '${t.full_name}')" class="action-link" style="color: #f59e0b;">Reset Pwd</button>
+                            <span class="text-enterprise-300 mx-2">|</span>
                             <button onclick="toggleUserStatus('${t.user_id}', ${!t.is_active})" class="action-link action-link-primary">${t.is_active ? 'Deactivate' : 'Activate'}</button>
                             <span class="text-enterprise-300 mx-2">|</span>
                             <button onclick="deleteUser('${t.user_id}')" class="action-link action-link-danger">Delete</button>
@@ -2409,6 +2413,33 @@ Dr. Fatima Al-Saud,fatima@academy.edu
                 }
             } catch (e) {
                 showToast('Failed to delete user', 'error');
+            }
+        }
+
+        async function resetUserPassword(userId, userName) {
+            const newPassword = prompt(`Reset password for ${userName}?\n\nEnter new password (leave empty for default 'temp123'):`);
+            if (newPassword === null) return; // User cancelled
+            
+            try {
+                const body = newPassword.trim() ? { new_password: newPassword.trim() } : {};
+                const res = await fetch(`${API_BASE}/users/${userId}/reset-password`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                if (res.ok) {
+                    const result = await res.json();
+                    const msg = result.reset_to_default 
+                        ? `Password reset to 'temp123' for ${userName}`
+                        : `Password updated for ${userName}`;
+                    showToast(msg, 'success');
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || 'Failed to reset password', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to reset password', 'error');
             }
         }
 

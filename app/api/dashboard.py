@@ -629,6 +629,50 @@ async def update_user_status(user_id: str, data: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/api/users/{user_id}/reset-password")
+async def reset_user_password(user_id: str, data: dict = None):
+    """
+    Reset a user's password (admin function).
+    If new_password is provided, use it. Otherwise, reset to temp123.
+    """
+    try:
+        if mongodb.db is None:
+            raise HTTPException(status_code=503, detail="MongoDB not connected")
+        
+        # Check if user exists
+        user = await mongodb.db.users.find_one({"user_id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Use provided password or default to temp123
+        new_password = "temp123"
+        if data and data.get("new_password"):
+            new_password = data["new_password"].strip()
+            if len(new_password) < 6:
+                raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        
+        # Hash and update password
+        password_hash = hash_password(new_password)
+        
+        await mongodb.db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "password_hash": password_hash,
+                "password_last_changed": datetime.utcnow()
+            }}
+        )
+        
+        return {
+            "success": True,
+            "message": f"Password reset successfully for {user.get('full_name', 'user')}",
+            "reset_to_default": new_password == "temp123"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/api/users/{user_id}")
 async def delete_user(user_id: str):
     """Delete a user and all related records."""

@@ -184,14 +184,15 @@ class AttendanceService:
         """
         Scan a student's attendance QR code.
         Returns (success, message, record_data).
+        
+        Any teacher assigned to the same program as the class can scan for an open session.
         """
-        # Verify session belongs to teacher
+        # Get the session and verify it's open
         result = await self.pg.execute(
             select(AttendanceSession)
             .join(Class)
             .where(
                 AttendanceSession.session_id == UUID(session_id),
-                Class.teacher_id == UUID(teacher_user_id),
                 AttendanceSession.closed_at == None
             )
         )
@@ -199,6 +200,19 @@ class AttendanceService:
         
         if not session:
             return False, "Invalid or closed session", None
+        
+        # Verify that the teacher is authorized to scan for this session
+        # (teacher must be assigned to the same program as the class)
+        from sqlalchemy import text
+        verify_result = await self.pg.execute(text("""
+            SELECT 1 FROM classes c
+            JOIN teacher_programs tp ON c.program_id = tp.program_id
+            JOIN teachers t ON tp.teacher_id = t.teacher_id
+            WHERE c.class_id = :class_id AND t.user_id = :teacher_user_id
+        """), {"class_id": str(session.class_id), "teacher_user_id": teacher_user_id})
+        
+        if not verify_result.fetchone():
+            return False, "You are not authorized to scan for this class", None
         
         # Get token from Redis
         token_data = await self.redis.get_attendance_token(qr_token)
