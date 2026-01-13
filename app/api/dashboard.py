@@ -144,7 +144,7 @@ async def get_dashboard_stats():
             
             result = await session.execute(text("""
                 SELECT COUNT(*) FROM attendance_records 
-                WHERE DATE(check_in_time) = CURRENT_DATE
+                WHERE DATE(scanned_at) = CURRENT_DATE
             """))
             stats["attendance_today"] = result.scalar() or 0
     except:
@@ -203,12 +203,12 @@ async def get_telemetry():
             metrics["transactions"]["month"] = result.scalar() or 0
             
             result = await session.execute(text("""
-                SELECT COUNT(*) FROM attendance_records WHERE DATE(check_in_time) = CURRENT_DATE
+                SELECT COUNT(*) FROM attendance_records WHERE DATE(scanned_at) = CURRENT_DATE
             """))
             metrics["attendance"]["today"] = result.scalar() or 0
             
             result = await session.execute(text("""
-                SELECT COUNT(*) FROM attendance_records WHERE check_in_time >= CURRENT_DATE - INTERVAL '7 days'
+                SELECT COUNT(*) FROM attendance_records WHERE scanned_at >= CURRENT_DATE - INTERVAL '7 days'
             """))
             metrics["attendance"]["week"] = result.scalar() or 0
     except:
@@ -259,10 +259,10 @@ async def get_attendance_trends():
     try:
         async with async_session_factory() as session:
             result = await session.execute(text("""
-                SELECT DATE(check_in_time) as date, COUNT(*) as count
+                SELECT DATE(scanned_at) as date, COUNT(*) as count
                 FROM attendance_records
-                WHERE check_in_time >= CURRENT_DATE - INTERVAL '7 days'
-                GROUP BY DATE(check_in_time) ORDER BY date
+                WHERE scanned_at >= CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY DATE(scanned_at) ORDER BY date
             """))
             rows = result.fetchall()
             return [{"date": str(r[0]), "count": r[1]} for r in rows]

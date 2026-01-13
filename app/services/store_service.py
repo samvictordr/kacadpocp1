@@ -319,7 +319,7 @@ class StoreService:
             return False, "No meal allowance set for today", None
         
         return True, "Teacher found", {
-            "student_id": str(teacher.teacher_id),  # Use student_id key for compatibility
+            "student_id": f"teacher:{teacher.teacher_id}",  # Include prefix for charge routing
             "student_name": teacher.full_name,
             "program_name": program.name if program else "Staff",
             "balance": balance_info["remaining"],
